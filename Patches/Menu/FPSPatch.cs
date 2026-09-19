@@ -23,8 +23,6 @@
 
 namespace iiMenu.Patches.Menu
 {
-    // VRRig.PackCompetitiveData no longer carries FPS data as of the latest game update.
-    // Player stats now serialize through GTPlayerStats.DelayedUpdate instead.
     [HarmonyPatch(typeof(GTPlayerStats), nameof(GTPlayerStats.DelayedUpdate))]
     public class FPSPatch
     {

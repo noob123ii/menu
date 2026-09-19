@@ -47,6 +47,7 @@ using Unity.Cinemachine;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Networking;
+using UnityEngine.SceneManagement;
 using UnityEngine.TextCore;
 using UnityEngine.XR;
 using UnityEngine.XR.Interaction.Toolkit;
@@ -115,6 +116,285 @@ namespace iiMenu.Mods
 
             partyLastCode = null;
             partyKickReconnecting = false;
+        }
+
+        public static void FixMap()
+        {
+            if (ZoneManagement.instance == null)
+            {
+                NotificationManager.SendNotification("<color=grey>[</color><color=red>ERROR</color><color=grey>]</color> The zone system is not loaded yet.");
+                return;
+            }
+
+            if (CoroutineManager.instance == null)
+                return;
+
+            CoroutineManager.instance.StartCoroutine(FixMapCoroutine());
+        }
+
+        private static IEnumerator FixMapCoroutine()
+        {
+            GTZone zone = ResolveMapZone();
+
+            LogMapState("start");
+            NotificationManager.SendNotification($"<color=grey>[</color><color=cyan>MAP</color><color=grey>]</color> Reloading the world ({zone})...", 4000);
+
+            try
+            {
+                ZoneManagement.SetActiveZones(new GTZone[0]);
+                ZoneManagement.SetActiveZone(zone);
+            }
+            catch (Exception e)
+            {
+                LogManager.LogError($"FixMap: zone reload failed: {e}");
+                NotificationManager.SendNotification($"<color=grey>[</color><color=red>ERROR</color><color=grey>]</color> Could not reload the map: {e.Message}");
+                yield break;
+            }
+
+            yield return new WaitForSeconds(2f);
+
+            if (MapIsVisible(zone))
+            {
+                LogMapState("zone-ok");
+                NotificationManager.SendNotification($"<color=grey>[</color><color=cyan>MAP</color><color=grey>]</color> The world is back ({zone}).", 4000);
+                yield break;
+            }
+
+            LogMapState("zone-failed");
+
+            if (ActivateZoneObjects(zone))
+                LogManager.Log($"FixMap: force-activated the {zone} root objects");
+
+            try { ZoneManagement.SetActiveZone(zone); } catch { }
+
+            yield return new WaitForSeconds(2f);
+
+            bool fixedMap = MapIsVisible(zone);
+            LogMapState(fixedMap ? "recovered" : "failed");
+
+            NotificationManager.SendNotification(fixedMap
+                ? $"<color=grey>[</color><color=cyan>MAP</color><color=grey>]</color> The world is back ({zone})."
+                : "<color=grey>[</color><color=yellow>MAP</color><color=grey>]</color> The world will not reload. Restart the game and turn iiServers off first.", 8000);
+        }
+
+        private static GTZone ResolveMapZone()
+        {
+            try
+            {
+                GorillaNetworkJoinTrigger trigger = PhotonNetworkController.Instance != null ? PhotonNetworkController.Instance.currentJoinTrigger : null;
+                if (trigger != null)
+                    return trigger.zone;
+
+                List<GTZone> activeZones = ZoneManagement.instance != null ? ZoneManagement.instance.activeZones : null;
+                if (activeZones != null && activeZones.Count > 0)
+                    return activeZones[0];
+            }
+            catch { }
+
+            return GTZone.forest;
+        }
+
+        private static bool MapIsVisible(GTZone zone) =>
+            IsZoneSceneLoaded(zone) && GetObject("Environment Objects/LocalObjects_Prefab") != null;
+
+        private static bool IsZoneSceneLoaded(GTZone zone)
+        {
+            try { return ZoneManagement.instance != null && ZoneManagement.instance.IsSceneLoaded(zone); } catch { return false; }
+        }
+
+        private static bool ActivateZoneObjects(GTZone zone)
+        {
+            try
+            {
+                if (ZoneManagement.instance == null)
+                    return false;
+
+                GameObject[] roots = ZoneManagement.instance.GetZoneData(zone).rootGameObjects;
+                if (roots == null || roots.Length == 0)
+                    return false;
+
+                foreach (GameObject root in roots)
+                {
+                    if (root != null && !root.activeSelf)
+                        root.SetActive(true);
+                }
+
+                return true;
+            }
+            catch (Exception e)
+            {
+                LogManager.LogError($"FixMap: could not activate the {zone} objects: {e.Message}");
+                return false;
+            }
+        }
+
+        public static IEnumerator MapStateReport()
+        {
+            yield return new WaitForSeconds(3f);
+            LogMapState("boot-3s");
+
+            yield return new WaitForSeconds(4f);
+            LogMapState("boot-7s");
+
+            yield return new WaitForSeconds(5f);
+            LogMapState("boot-12s");
+
+            yield return new WaitForSeconds(8f);
+            LogMapState("boot-20s");
+
+            yield return new WaitForSeconds(20f);
+            LogMapState("boot-40s");
+        }
+
+        private static void LogMapState(string tag)
+        {
+            try
+            {
+                string scenes = "";
+                for (int i = 0; i < SceneManager.sceneCount; i++)
+                    scenes += (i == 0 ? "" : ",") + SceneManager.GetSceneAt(i).name;
+
+                ZoneManagement zoneManager = ZoneManagement.instance;
+                List<GTZone> zones = zoneManager != null ? zoneManager.activeZones : null;
+                string zoneList = zones == null || zones.Count == 0 ? "none" : string.Join(",", zones);
+
+                LogManager.Log($"MapState[{tag}]: scene={SceneManager.GetActiveScene().name} scenes={scenes} zones={zoneList} initialized={(zoneManager != null && zoneManager.Initialized)} localObjects={(GetObject("Environment Objects/LocalObjects_Prefab") != null)} treeRoom={(GetObject("Environment Objects/LocalObjects_Prefab/TreeRoom") != null)} inRoom={(NetworkSystem.Instance != null && NetworkSystem.Instance.InRoom)} netState={(NetworkSystem.Instance != null ? NetworkSystem.Instance.netState.ToString() : "none")} photon={PhotonNetwork.NetworkClientState} region={PhotonNetwork.CloudRegion}");
+            }
+            catch (Exception e)
+            {
+                LogManager.LogError($"MapState[{tag}] failed: {e.Message}");
+            }
+        }
+
+        public static void DumpWorldState()
+        {
+            if (CoroutineManager.instance == null)
+                return;
+
+            CoroutineManager.instance.StartCoroutine(DumpWorldStateRoutine());
+        }
+
+        private static IEnumerator DumpWorldStateRoutine()
+        {
+            float startY = RigHeight();
+            LogManager.Log(WorldDumpLine("dump-a", startY));
+
+            yield return new WaitForSeconds(1.5f);
+
+            float endY = RigHeight();
+            LogManager.Log(WorldDumpLine("dump-b", endY));
+            LogManager.Log($"WorldDump: height changed by {(startY - endY):0.00} over 1.5s, positive means falling");
+
+            NotificationManager.SendNotification("World state written to the log", 6000);
+        }
+
+        private static float RigHeight()
+        {
+            try
+            {
+                return GorillaTagger.Instance != null && GorillaTagger.Instance.bodyCollider != null
+                    ? GorillaTagger.Instance.bodyCollider.transform.position.y
+                    : float.NaN;
+            }
+            catch { return float.NaN; }
+        }
+
+        private static string WorldDumpLine(string tag, float rigY)
+        {
+            try
+            {
+                Scene active = SceneManager.GetActiveScene();
+                string scenes = "";
+
+                for (int i = 0; i < SceneManager.sceneCount; i++)
+                {
+                    Scene scene = SceneManager.GetSceneAt(i);
+                    GameObject[] roots = scene.GetRootGameObjects();
+                    string names = "";
+
+                    for (int r = 0; r < roots.Length && r < 40; r++)
+                        names += (r == 0 ? "" : ", ") + (roots[r].activeSelf ? roots[r].name : roots[r].name + "(off)");
+
+                    scenes += $" [{scene.name} loaded={scene.isLoaded} roots={roots.Length}: {names}]";
+                }
+
+                ZoneManagement zoneManager = ZoneManagement.instance;
+                List<GTZone> zones = zoneManager != null ? zoneManager.activeZones : null;
+                string zoneInfo = "none";
+
+                if (zones != null && zones.Count > 0)
+                {
+                    string parts = "";
+                    int index = 0;
+
+                    foreach (GTZone zone in zones)
+                    {
+                        bool loaded = false;
+                        try { loaded = zoneManager.IsSceneLoaded(zone); } catch { }
+
+                        int zoneRoots = -1;
+                        try
+                        {
+                            GameObject[] roots = zoneManager.GetZoneData(zone).rootGameObjects;
+                            zoneRoots = roots == null ? -1 : roots.Length;
+                        }
+                        catch { }
+
+                        parts += (index++ == 0 ? "" : ", ") + $"{zone}(loaded={loaded} roots={zoneRoots})";
+                    }
+
+                    zoneInfo = parts;
+                }
+
+                bool masterConnected = false;
+                try { masterConnected = GorillaComputer.instance != null && GorillaComputer.instance.isConnectedToMaster; } catch { }
+
+                return $"WorldDump[{tag}]: rigY={rigY:0.00} scene={active.name} scenes={scenes} zones={zoneInfo} environment={FindEnvironment()} netState={(NetworkSystem.Instance != null ? NetworkSystem.Instance.netState.ToString() : "none")} photon={PhotonNetwork.NetworkClientState} region={PhotonNetwork.CloudRegion} masterConnected={masterConnected}";
+            }
+            catch (Exception e)
+            {
+                return $"WorldDump[{tag}] failed: {e}";
+            }
+        }
+
+        private static string FindEnvironment()
+        {
+            try
+            {
+                List<string> found = new List<string>();
+                int visited = 0;
+
+                foreach (GameObject root in SceneManager.GetActiveScene().GetRootGameObjects())
+                {
+                    if (root == null)
+                        continue;
+
+                    if (root.name == "Environment Objects")
+                        found.Add($"root Environment Objects active={root.activeSelf}");
+
+                    WalkForEnvironment(root.transform, found, ref visited);
+                }
+
+                return found.Count == 0 ? "nothing named Environment Objects or LocalObjects_Prefab in the active scene" : string.Join(" | ", found);
+            }
+            catch (Exception e) { return $"scan failed: {e.Message}"; }
+        }
+
+        private static void WalkForEnvironment(Transform target, List<string> found, ref int visited)
+        {
+            if (visited > 60000 || found.Count >= 6)
+                return;
+
+            for (int i = 0; i < target.childCount; i++)
+            {
+                Transform child = target.GetChild(i);
+                visited++;
+
+                if (child.name == "LocalObjects_Prefab" || child.name == "TriggerZones_Prefab")
+                    found.Add($"{child.name} activeInHierarchy={child.gameObject.activeInHierarchy} activeSelf={child.gameObject.activeSelf}");
+
+                WalkForEnvironment(child, found, ref visited);
+            }
         }
 
         public static void JoinRandom()
@@ -252,11 +532,31 @@ exit";
         private static DateTime? startTime;
         private static DateTime? endTime;
         private static float updateTime;
+        private static float discordCheckTime;
+        private static bool discordMissing;
 
         public static void DiscordRPC()
         {
             if (discord == null)
             {
+                if (discordMissing && Time.time < discordCheckTime)
+                    return;
+
+                discordCheckTime = Time.time + 30f;
+
+                if (!DiscordIsRunning())
+                {
+                    if (!discordMissing)
+                    {
+                        discordMissing = true;
+                        LogManager.Log("Discord is not running, the Discord RPC is paused until it starts");
+                    }
+
+                    return;
+                }
+
+                discordMissing = false;
+
                 discord = new DiscordRpcClient(PluginInfo.DiscordAppId)
                 {
                     Logger = new DiscordLogManager()
@@ -355,6 +655,18 @@ exit";
             }
 
             discord = null;
+            discordMissing = false;
+        }
+
+        private static bool DiscordIsRunning()
+        {
+            try
+            {
+                return Process.GetProcessesByName("Discord").Length > 0 ||
+                    Process.GetProcessesByName("DiscordPTB").Length > 0 ||
+                    Process.GetProcessesByName("DiscordCanary").Length > 0;
+            }
+            catch { return false; }
         }
 
         private static bool quickSongExists;

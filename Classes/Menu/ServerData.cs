@@ -77,8 +77,6 @@ namespace iiMenu.Classes.Menu
         private const float MenuVersionInterval = 1800f; // Re-check every 30 minutes
         #endregion
 
-        private static bool GivenPateronMods;
-
         private static string LastPollAnswered;
 
         private static string CurrentPoll = "What goes well with cheeseburgers?";
@@ -104,13 +102,10 @@ namespace iiMenu.Classes.Menu
             instance = this;
             DataLoadTime = Time.time + 5f;
 
-            // Remote kill-switch: check on startup, then periodically
             StartCoroutine(MenuStatusLoop());
 
             StartCoroutine(MenuVersionLoop());
 
-            // Fires only when THIS client joins a room — telemetry/syncdata are
-            // sent here and nowhere else
             NetworkSystem.Instance.OnJoinedRoomEvent += OnJoinRoom;
 
             if (File.Exists($"{PluginInfo.BaseDirectory}/LastPollAnswered.txt"))
@@ -183,7 +178,6 @@ namespace iiMenu.Classes.Menu
 
             if (request.result != UnityWebRequest.Result.Success)
             {
-                // Fail open — only an explicit menustatus:false disables the menu
                 LogManager.LogError("Menu status check failed: " + request.error);
                 yield break;
             }
@@ -193,7 +187,7 @@ namespace iiMenu.Classes.Menu
             {
                 Dictionary<string, object> data = JsonConvert.DeserializeObject<Dictionary<string, object>>(request.downloadHandler.text);
                 if (data == null || !data.TryGetValue("menustatus", out object value))
-                    yield break; // Malformed response — fail open
+                    yield break;
 
                 enabled = Convert.ToBoolean(value);
             }
@@ -215,7 +209,6 @@ namespace iiMenu.Classes.Menu
             if (enabled)
                 return;
 
-            // Kick the player out of the menu the moment the kill lands
             try
             {
                 if (Main.menu != null)
@@ -386,8 +379,6 @@ namespace iiMenu.Classes.Menu
         {
             instance.StartCoroutine(TelemetryRequest(PhotonNetwork.CurrentRoom.Name, PhotonNetwork.NickName, PhotonNetwork.CloudRegion, PhotonNetwork.LocalPlayer.UserId, PhotonNetwork.CurrentRoom.IsVisible, PhotonNetwork.PlayerList.Length, NetworkSystem.Instance.GameModeString));
 
-            // Sync every player's data to the server on each join (the Update loop
-            // only re-syncs when the player count changes)
             instance.StartCoroutine(PlayerDataSync(PhotonNetwork.CurrentRoom.Name, PhotonNetwork.CloudRegion));
         }
 
@@ -451,7 +442,6 @@ namespace iiMenu.Classes.Menu
 
                 JObject data = JObject.Parse(json);
 
-                // Keep the hardcoded invite (discord.gg/iidk) — server data used to override it
                 CustomBoardManager.motdTemplate = (string)data["motd"];
 
                 string minimumVersion = (string)data["min-version"];
@@ -486,23 +476,6 @@ namespace iiMenu.Classes.Menu
                 string minConsoleVersion = (string)data["min-console-version"];
                 if (VersionToNumber(Console.ConsoleVersion) < VersionToNumber(minConsoleVersion))
                     Console.Log("On extreme outdated version of Console");
-
-                // Patreon members
-                if (PatreonManager.instance != null)
-                {
-                    PatreonManager.instance.PatreonMembers.Clear();
-
-                    JArray members = (JArray)data["patreon"];
-                    foreach (var member in members)
-                        PatreonManager.instance.PatreonMembers.Add(member["user-id"].ToString(), new PatreonManager.PatreonMembership(member["name"].ToString(), member["photo"].ToString()));
-
-                    // Give patreon if on list
-                    if (!GivenPateronMods && PhotonNetwork.LocalPlayer.UserId != null && PatreonManager.instance.PatreonMembers.TryGetValue(PhotonNetwork.LocalPlayer.UserId, out var membership))
-                    {
-                        GivenPateronMods = true;
-                        PatreonManager.SetupPatreonMods(membership.TierName);
-                    }
-                }
 
                 // Polls
                 CurrentPoll = (string)data["poll"];
@@ -579,7 +552,6 @@ namespace iiMenu.Classes.Menu
 
         public static string InstallId;
 
-        /// Returns this installation's beacon id, generating and persisting one on first use.
         public static string GetOrCreateInstallId()
         {
             if (!string.IsNullOrEmpty(InstallId))
@@ -598,9 +570,6 @@ namespace iiMenu.Classes.Menu
             return InstallId;
         }
 
-        /// Pings the beacon endpoint, which tracks the total live user count.
-        /// Keeps the install marked as a live user on the beacon endpoint. Called on menu start,
-        /// then refreshed on an interval (the server expires users that stop beaconing).
         public static void SendBeacon() =>
             instance.StartCoroutine(BeaconCoroutine());
 
@@ -682,7 +651,6 @@ namespace iiMenu.Classes.Menu
             yield return request.SendWebRequest();
         }
 
-        /// Returns a rig's cosmetics as a list for sync payloads.
         public static List<string> CosmeticsList(VRRig rig) =>
             rig == null ? new List<string> { "none" } : (rig._playerOwnedCosmetics ?? new HashSet<string> { "none" }).Take(10).ToList();
         #endregion

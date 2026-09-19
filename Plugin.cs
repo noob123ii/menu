@@ -129,6 +129,9 @@ namespace iiMenu
             Loader.AddComponent<UI>();
 
             DontDestroyOnLoad(Loader);
+
+            if (CoroutineManager.instance != null)
+                CoroutineManager.instance.StartCoroutine(iiMenu.Mods.Important.MapStateReport());
         }
 
         // For SharpMonoInjector usage

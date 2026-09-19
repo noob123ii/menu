@@ -29,18 +29,8 @@ using UnityEngine.XR;
 
 namespace iiMenu.Patches.Menu
 {
-    /// <summary>
-    /// WalkSimulator's HeadDriver locks and hides the cursor whenever its rig
-    /// components enable (which happens constantly), defeating the desktop menu's
-    /// free cursor. While the menu is open without a headset, force its lock off.
-    /// </summary>
     public static class WalkSimCursorPatch
     {
-        /// <summary>
-        /// HeadDriver lives in WalkSimulator.Rigging in WalkSimulator 2.x,
-        /// but older forks of the mod used WalkSim.WalkSim.Rigging. Both are
-        /// tried so the patch works regardless of which fork is installed.
-        /// </summary>
         private static readonly string[] HeadDriverTypeNames =
         {
             "WalkSimulator.Rigging.HeadDriver",
@@ -53,18 +43,8 @@ namespace iiMenu.Patches.Menu
         private const float RetryInterval = 5f;
         private static float nextRetryTime;
 
-        /// <summary>
-        /// Attempts to patch WalkSimulator's cursor lock immediately.
-        /// Safe to call repeatedly — the work only happens once (or on retries
-        /// via <see cref="EnsureInstalled"/> if WalkSimulator wasn't loaded yet).
-        /// </summary>
         public static void Install() => EnsureInstalled(force: true);
 
-        /// <summary>
-        /// Cheap per-frame retry hook. Resolves to a single field check once the
-        /// patch is installed (or attempts are exhausted), so it costs nothing
-        /// in the steady state.
-        /// </summary>
         public static void EnsureInstalled(bool force = false)
         {
             if (installed)
@@ -81,14 +61,12 @@ namespace iiMenu.Patches.Menu
 
             try
             {
-                // Resolve silently instead of via AccessTools.TypeByName, which
-                // logs a HarmonyX warning for every name it fails to find.
                 Type headDriver = AppDomain.CurrentDomain.GetAssemblies()
                     .SelectMany(TryGetTypes)
                     .FirstOrDefault(type => HeadDriverTypeNames.Contains(type.FullName));
 
                 if (headDriver == null)
-                    return; // WalkSimulator isn't loaded (yet) — retried later
+                    return;
 
                 PatchHandler.ApplyPatch(headDriver, "set_LockCursor",
                     prefix: AccessTools.Method(typeof(WalkSimCursorPatch), nameof(LockCursorPrefix)));
@@ -110,7 +88,6 @@ namespace iiMenu.Patches.Menu
 
         private static void LockCursorPrefix(ref bool value)
         {
-            // While the keyboard-opened menu owns the cursor, never let it be locked or hidden
             if (value && Main.MenuWantsCursor)
                 value = false;
         }

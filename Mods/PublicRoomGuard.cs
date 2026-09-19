@@ -31,11 +31,6 @@ using UnityEngine;
 
 namespace iiMenu.Mods
 {
-    /// <summary>
-    /// Automatically disables every enabled "detected" mod the moment you join a
-    /// public room. Prevents the most common ban scenario: leaving a risky mod
-    /// enabled and forgetting about it before joining a public lobby.
-    /// </summary>
     public static class PublicRoomGuard
     {
         public static bool PublicRoomGuardEnabled;
@@ -62,15 +57,13 @@ namespace iiMenu.Mods
                     .Where(button => button.detected)
                     .ToArray();
 
-                var disabled = new System.Collections.Generic.List<string>();
+                var disabled = new List<string>();
 
                 foreach (var button in detectedButtons)
                 {
                     if (button == null || !button.enabled)
                         continue;
 
-                    // Disable through the standard toggle path so disableMethod
-                    // hooks, UI state, and dependent fields all unwind correctly.
                     Main.Toggle(button.buttonText);
                     disabled.Add(button.overlapText ?? button.buttonText);
                 }

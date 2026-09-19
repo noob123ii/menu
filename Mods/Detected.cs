@@ -1439,8 +1439,6 @@ namespace iiMenu.Mods
             string queue = Buttons.GetIndex("Switch to Modded Gamemode").enabled ? GorillaComputer.instance.currentQueue + "MODDED_" : GorillaComputer.instance.currentQueue;
             string mapPrefix = string.Empty;
 
-            // The game removed allowedMapsToJoin in newer builds. Resolve it
-            // defensively so this detected-only helper cannot break room joins.
             FieldInfo mapsField = typeof(GorillaComputer).GetField("allowedMapsToJoin", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             if (mapsField?.GetValue(GorillaComputer.instance) is string[] allowedMaps)
                 mapPrefix = string.Join("", allowedMaps);

@@ -22,6 +22,7 @@
 ﻿using GorillaNetworking;
 using GorillaNetworking.Store;
 using HarmonyLib;
+using iiMenu.Managers;
 using static iiMenu.Menu.Main;
 
 namespace iiMenu.Patches.Menu
@@ -32,8 +33,16 @@ namespace iiMenu.Patches.Menu
         public static bool CosmeticsInitialized;
         private static void Postfix()
         {
+            CosmeticsController cosmetics = CosmeticsController.instance;
+
+            if (cosmetics == null)
+            {
+                LogManager.Log("Bundle check ran before the cosmetics were initialized");
+                return;
+            }
+
             CosmeticsInitialized = true;
-            CosmeticsOwned = CosmeticsController.instance.concatStringCosmeticsAllowed;
+            CosmeticsOwned = cosmetics.concatStringCosmeticsAllowed;
         }
     }
 }

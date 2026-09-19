@@ -20,9 +20,6 @@ namespace iiMenu.Mods
         public const string MyInstantsApiBase = "https://myinstants-api.vercel.app";
         public const string MyInstantsSearchUrl = MyInstantsApiBase + "/search?q=";
 
-        // "recent" is the only endpoint that returns results without a search query.
-        // The upstream "best" and "trending" endpoints currently answer with an empty data array,
-        // and single-character queries return HTTP 404, so both are guarded below.
         public const string MyInstantsRecentUrl = MyInstantsApiBase + "/recent";
         public const string MyInstantsTrendingUrl = MyInstantsApiBase + "/trending?q=en";
         public const string MyInstantsBestUrl = MyInstantsApiBase + "/best?q=en";
@@ -151,7 +148,6 @@ namespace iiMenu.Mods
             {
                 using (var req = UnityWebRequestMultimedia.GetAudioClip(mp3Url, AudioType.MPEG))
                 {
-                    // myinstants.com 403s default user agents — must look like a browser
                     try { req.SetRequestHeader("User-Agent", AssetUtilities.BrowserUserAgent); } catch { }
                     yield return req.SendWebRequest();
                     if (req.result == UnityWebRequest.Result.Success)
@@ -159,7 +155,6 @@ namespace iiMenu.Mods
                         try
                         {
                             clip = DownloadHandlerAudioClip.GetContent(req);
-                            // Persist so folder drop-in sees it and it survives restart
                             byte[] bytes = req.downloadHandler?.data;
                             if (clip != null && bytes != null && bytes.Length > 1024)
                                 File.WriteAllBytes(abs, bytes);
@@ -167,7 +162,6 @@ namespace iiMenu.Mods
                         catch { clip = null; }
                     }
 
-                    // Fallback: our downloader sets a browser UA and caches to disk
                     if (clip == null)
                         clip = AssetUtilities.LoadSoundFromURL(mp3Url, rel);
                 }
@@ -194,10 +188,6 @@ namespace iiMenu.Mods
         public static void FetchTrending(Action<List<MyInstantEntry>> onDone) =>
             CoroutineManager.instance.StartCoroutine(FetchEntries(MyInstantsTrendingUrl, onDone));
 
-        /// <summary>
-        /// Fetches and parses one MyInstants endpoint. Failures report a readable reason instead of
-        /// a silently empty list, so the menu can show the user what actually went wrong.
-        /// </summary>
         public static IEnumerator FetchEntries(string url, Action<List<MyInstantEntry>> onDone, Action<string> onError = null)
         {
             List<MyInstantEntry> list = new List<MyInstantEntry>();
@@ -265,10 +255,6 @@ namespace iiMenu.Mods
             return list;
         }
 
-        /// <summary>
-        /// The API returns HTML-escaped titles ("Now&#x27;s your chance"). Decode them so the button
-        /// label and the cached file name both read correctly.
-        /// </summary>
         public static string HtmlDecode(string value)
         {
             if (string.IsNullOrEmpty(value))

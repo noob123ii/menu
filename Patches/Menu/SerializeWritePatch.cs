@@ -26,24 +26,9 @@ using UnityEngine;
 
 namespace iiMenu.Patches.Menu
 {
-    /// <summary>
-    /// Lets outgoing serialization packets report a spoofed rig position without
-    /// the rig's transform ever visibly moving.
-    ///
-    /// The hook point matters: the rig's position is captured into the outgoing
-    /// InputStruct inside PhotonNetwork.OnSerializeWrite (before SerializeWriteShared
-    /// ever runs), so swapping the transform inside SerializeWriteShared is too late —
-    /// the packet would already contain the real position. Patching OnSerializeWrite
-    /// swaps the transform before anything downstream reads it.
-    /// </summary>
     [HarmonyPatch(typeof(PhotonNetwork), nameof(PhotonNetwork.OnSerializeWrite))]
     public static class SerializeWritePatch
     {
-        /// <summary>
-        /// When non-null, the local rig serializes this position instead of its real one.
-        /// Only set this inside a try/finally that clears it, and only for the span of a
-        /// serialization call — it swaps the transform for the duration of the write.
-        /// </summary>
         public static Vector3? positionOverride;
 
         public static void Prefix(PhotonView view, out Vector3? __state)
@@ -53,7 +38,6 @@ namespace iiMenu.Patches.Menu
             if (positionOverride == null || VRRig.LocalRig == null)
                 return;
 
-            // Only the local network rig's view carries the rig position
             if (GorillaTagger.Instance == null || GorillaTagger.Instance.myVRRig == null || view != GorillaTagger.Instance.myVRRig.GetView)
                 return;
 

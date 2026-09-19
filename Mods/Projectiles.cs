@@ -210,7 +210,6 @@ namespace iiMenu.Mods
                 {
                 if (Vector3.Distance(GorillaTagger.Instance.bodyCollider.transform.position, position) > 3.9f && !bypassTeleport)
                 {
-                    // No-move throw: one packet reports us at the throw origin so remote validation passes.
                     SerializeWritePatch.positionOverride = position + new Vector3(0f, velocity.y > 0f ? -3f : 3f, 0f);
                     try
                     {

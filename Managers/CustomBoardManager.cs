@@ -38,11 +38,13 @@ namespace iiMenu.Managers
         {
             instance = this;
             SceneManager.sceneLoaded += SceneLoaded;
+            SceneManager.sceneUnloaded += SceneUnloaded;
         }
 
         private void OnDestroy()
         {
             SceneManager.sceneLoaded -= SceneLoaded;
+            SceneManager.sceneUnloaded -= SceneUnloaded;
             foreach (GameObject board in objectBoards.Values)
             {
                 if (board != null)
@@ -52,6 +54,7 @@ namespace iiMenu.Managers
             textMeshPro.RemoveAll(t => t == null);
             foreach (var k in characterDistanceArchive.Keys.Where(k => k == null).ToList()) characterDistanceArchive.Remove(k);
             foreach (var k in textColorArchive.Keys.Where(k => k == null).ToList()) textColorArchive.Remove(k);
+            foreach (var k in boardPanelColors.Keys.Where(k => k == null).ToList()) boardPanelColors.Remove(k);
             if (ownsBoardMaterial && _boardMaterial != null)
             {
                 Destroy(_boardMaterial);
@@ -160,6 +163,9 @@ namespace iiMenu.Managers
         private static Material _screenBlack;
 
         public static bool CustomBoardTextEnabled = true;
+        public static bool CustomBoardOrange = true;
+        private static readonly Color32 boardOrange = new Color32(255, 138, 0, 255);
+        private static readonly Dictionary<Renderer, Color> boardPanelColors = new Dictionary<Renderer, Color>();
         private static Material _boardMaterial = new Material(Shader.Find("GorillaTag/UberShader"));
         private static bool ownsBoardMaterial = true;
         public static Material BoardMaterial
@@ -304,7 +310,7 @@ namespace iiMenu.Managers
             {
                 if (CustomBoardsEnabled)
                 {
-                BoardMaterial.color = backgroundColor.GetCurrentColor();
+                BoardMaterial.color = CustomBoardOrange && ownsBoardMaterial ? (Color)boardOrange : backgroundColor.GetCurrentColor();
 
                 if (motdTitle == null)
                 {
@@ -369,6 +375,8 @@ namespace iiMenu.Managers
                 foreach (var k in deadKeys) characterDistanceArchive.Remove(k);
                 var deadColorKeys = textColorArchive.Keys.Where(k => k == null).ToList();
                 foreach (var k in deadColorKeys) textColorArchive.Remove(k);
+                var deadPanelKeys = boardPanelColors.Keys.Where(k => k == null).ToList();
+                foreach (var k in deadPanelKeys) boardPanelColors.Remove(k);
 
                 foreach (TextMeshPro txt in textMeshPro.Where(text => text.isActiveAndEnabled))
                 {
@@ -395,8 +403,288 @@ namespace iiMenu.Managers
                 }
             }
             catch { }
+
+            try
+            {
+                bool tintBoardPanels = CustomBoardsEnabled && CustomBoardOrange;
+
+                TintBoardSurfaces(tintBoardPanels);
+
+                if (GorillaScoreboardTotalUpdater.allScoreboards != null)
+                {
+                    foreach (GorillaScoreBoard scoreboard in GorillaScoreboardTotalUpdater.allScoreboards)
+                    {
+                        if (scoreboard == null)
+                            continue;
+
+                        TintBoardPanels(scoreboard.transform, tintBoardPanels, 0);
+
+                        if (scoreboard.leftPanel != null)
+                            TintBoardPanels(scoreboard.leftPanel.transform, tintBoardPanels, 0);
+
+                        if (scoreboard.rightPanel != null)
+                            TintBoardPanels(scoreboard.rightPanel.transform, tintBoardPanels, 0);
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private static readonly HashSet<string> loggedSurfaceHits = new HashSet<string>();
+
+        private static readonly string[] BoardPanelNames =
+        {
+            "board", "code of conduct", "codeofconduct", "codeofconduct_group", "motd", "motdscreen",
+            "monitor", "monitorscreen", "terminalmonitor", "screen", "screengreen", "screenred",
+            "wallmonitorscreen_small", "wallmonitorforest", "wallmonitorforestbg"
+        };
+
+        private static readonly string[] BoardGroupDumps =
+        {
+            "Environment Objects/LocalObjects_Prefab/TreeRoom/TreeRoomInteractables",
+            "Environment Objects/LocalObjects_Prefab/TreeRoom/TreeRoomBoundaryStones/BoundaryStoneSet_Forest"
+        };
+
+        private static readonly HashSet<string> dumpedBoardGroups = new HashSet<string>();
+
+        private static Renderer[] boardSurfaces;
+        private static float boardSurfaceRefresh;
+        private static float nextSurfacePass;
+
+        private static void RefreshBoardSurfaces()
+        {
+            if (boardSurfaces != null && boardSurfaces.Length > 0 && Time.time < boardSurfaceRefresh)
+                return;
+
+            boardSurfaceRefresh = Time.time + 5f;
+
+            List<Renderer> surfaces = new List<Renderer>();
+
+            try
+            {
+                GameObject treeRoom = GetObject("Environment Objects/LocalObjects_Prefab/TreeRoom");
+                if (treeRoom != null)
+                    surfaces.AddRange(treeRoom.GetComponentsInChildren<Renderer>(true));
+            }
+            catch { }
+
+            boardSurfaces = surfaces
+                .Where(renderer => renderer != null && renderer.GetComponent<TMP_Text>() == null)
+                .ToArray();
+        }
+
+        private static void TintBoardSurfaces(bool tint)
+        {
+            if (Time.time < nextSurfacePass)
+                return;
+
+            nextSurfacePass = Time.time + 1f;
+
+            RefreshBoardSurfaces();
+
+            if (boardSurfaces == null || boardSurfaces.Length == 0)
+                return;
+
+            foreach (Renderer surface in boardSurfaces)
+            {
+                if (surface == null)
+                    continue;
+
+                bool nameMatch = IsBoardPanel(surface.transform);
+                bool materialMatch = IsBoardMaterial(surface);
+
+                if (!nameMatch && !materialMatch)
+                    continue;
+
+                ApplyBoardPanelColor(surface, tint);
+
+                if (tint && loggedSurfaceHits.Add(PathOf(surface.transform)))
+                    LogManager.Log($"Orange board: tinted {PathOf(surface.transform)} material={surface.sharedMaterial.name} shader={surface.sharedMaterial.shader.name}{(materialMatch && !nameMatch ? " (by material)" : "")}");
+            }
+
+            if (tint)
+            {
+                foreach (string group in BoardGroupDumps)
+                    DumpBoardGroup(group);
+
+                DumpTreeRoomSurfaces();
+            }
+        }
+
+        private static bool IsBoardMaterial(Renderer surface)
+        {
+            Material material = surface.sharedMaterial;
+            if (material == null)
+                return false;
+
+            return material.name.IndexOf("green", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static void DumpTreeRoomSurfaces()
+        {
+            if (!dumpedBoardGroups.Add("tree-room-surfaces"))
+                return;
+
+            GameObject treeRoom = GetObject("Environment Objects/LocalObjects_Prefab/TreeRoom");
+            if (treeRoom == null)
+            {
+                dumpedBoardGroups.Remove("tree-room-surfaces");
+                return;
+            }
+
+            foreach (TextMeshPro text in instance.textMeshPro.ToArray())
+            {
+                if (text == null)
+                    continue;
+
+                Vector3 position = text.transform.position;
+                LogManager.Log($"TreeRoomText: {PathOf(text.transform)} pos=({position.x:0.00},{position.y:0.00},{position.z:0.00}) forward=({text.transform.forward.x:0.00},{text.transform.forward.y:0.00},{text.transform.forward.z:0.00})");
+            }
+
+            int dumped = 0;
+
+            foreach (Renderer renderer in treeRoom.GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer == null || dumped >= 90)
+                    break;
+
+                if (renderer.GetComponent<TMP_Text>() != null)
+                    continue;
+
+                Bounds bounds = renderer.bounds;
+                if (bounds.size.magnitude > 30f || bounds.size.magnitude < 0.4f)
+                    continue;
+
+                Material material = renderer.sharedMaterial;
+                dumped++;
+
+                LogManager.Log($"TreeRoomSurface: {PathOf(renderer.transform)} material={(material == null ? "none" : material.name)} size=({bounds.size.x:0.00},{bounds.size.y:0.00},{bounds.size.z:0.00}) center=({bounds.center.x:0.0},{bounds.center.y:0.0},{bounds.center.z:0.0})");
+            }
+
+            LogManager.Log($"TreeRoomSurface: dumped {dumped} renderers");
+        }
+
+        private static void DumpBoardGroup(string path)
+        {
+            if (!dumpedBoardGroups.Add(path))
+                return;
+
+            GameObject group = GetObject(path);
+            if (group == null)
+            {
+                dumpedBoardGroups.Remove(path);
+                return;
+            }
+
+            string children = "";
+
+            foreach (Renderer renderer in group.GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer == null || renderer.GetComponent<TMP_Text>() != null)
+                    continue;
+
+                Material material = renderer.sharedMaterial;
+                children += $"{renderer.gameObject.name}[{(material == null ? "no material" : material.name)}] ";
+            }
+
+            LogManager.Log($"BoardGroup[{path}]: {children}");
+        }
+
+        private static bool IsBoardPanel(Transform target)
+        {
+            Transform current = target;
+
+            for (int depth = 0; depth < 4 && current != null; depth++)
+            {
+                string name = current.name;
+                int suffix = name.LastIndexOf(" (", StringComparison.Ordinal);
+
+                if (suffix > 0 && name.EndsWith(")"))
+                    name = name.Substring(0, suffix);
+
+                foreach (string panelName in BoardPanelNames)
+                    if (string.Equals(name, panelName, StringComparison.OrdinalIgnoreCase))
+                        return true;
+
+                current = current.parent;
+            }
+
+            return false;
+        }
+
+        private static string PathOf(Transform target)
+        {
+            if (target == null)
+                return null;
+
+            string path = target.name;
+
+            while (target.parent != null)
+            {
+                target = target.parent;
+                path = target.name + "/" + path;
+            }
+
+            return path;
+        }
+
+        private static void TintBoardPanels(Transform target, bool tint, int depth)
+        {
+            if (target == null || depth > 2)
+                return;
+
+            Renderer renderer = target.GetComponent<Renderer>();
+            if (renderer != null && renderer.GetComponent<TMP_Text>() == null && !IsBoardControl(target.name))
+                ApplyBoardPanelColor(renderer, tint);
+
+            for (int i = 0; i < target.childCount; i++)
+                TintBoardPanels(target.GetChild(i), tint, depth + 1);
+        }
+
+        private static bool IsBoardControl(string name) =>
+            name.IndexOf("text", StringComparison.OrdinalIgnoreCase) >= 0 ||
+            name.IndexOf("button", StringComparison.OrdinalIgnoreCase) >= 0 ||
+            name.IndexOf("toggle", StringComparison.OrdinalIgnoreCase) >= 0 ||
+            name.IndexOf("icon", StringComparison.OrdinalIgnoreCase) >= 0;
+
+        private static void ApplyBoardPanelColor(Renderer renderer, bool tint)
+        {
+            Material material = renderer.material;
+            if (material == null)
+                return;
+
+            bool hasColor = material.HasProperty("_Color");
+            bool hasBaseColor = !hasColor && material.HasProperty("_BaseColor");
+
+            if (!hasColor && !hasBaseColor)
+                return;
+
+            if (tint)
+            {
+                if (!boardPanelColors.ContainsKey(renderer))
+                    boardPanelColors[renderer] = hasColor ? material.GetColor("_Color") : material.GetColor("_BaseColor");
+
+                if (hasColor)
+                    material.color = boardOrange;
+                else
+                    material.SetColor("_BaseColor", boardOrange);
+            }
+            else if (boardPanelColors.TryGetValue(renderer, out Color original))
+            {
+                if (hasColor)
+                    material.color = original;
+                else
+                    material.SetColor("_BaseColor", original);
+
+                boardPanelColors.Remove(renderer);
+            }
         }
         #endregion
+
+        private void SceneUnloaded(Scene scene)
+        {
+            LogManager.Log($"SceneUnloaded: {scene.name}");
+        }
 
         private void RestoreOriginalBoardScreens()
         {
@@ -413,6 +701,8 @@ namespace iiMenu.Managers
 
         public void SceneLoaded(Scene scene, LoadSceneMode mode)
         {
+            LogManager.Log($"SceneLoaded: {scene.name} ({mode})");
+
             if (!CustomBoardsEnabled) return;
             if (!BoardInformations.TryGetValue(scene.name, out var config)) return;
 

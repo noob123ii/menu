@@ -31,11 +31,6 @@ using UnityEngine;
 
 namespace iiMenu.Classes.Menu
 {
-    /// <summary>
-    /// Legacy Console support layer. The Console overlay, admin command channel,
-    /// and admin toolkit have all been removed — this class only keeps the helpers
-    /// other menu systems still rely on (logging, notifications, indicator spacing).
-    /// </summary>
     public static class Console
     {
         #region Configuration
@@ -51,9 +46,6 @@ namespace iiMenu.Classes.Menu
         #endregion
 
         #region Lifecycle
-        /// <summary>
-        /// Spawns (or reuses) the persistent GameObject that hosts the server data manager.
-        /// </summary>
         public static GameObject SpawnServerData()
         {
             ConsoleObject = GameObject.Find("iiMenu_ServerData") ?? new GameObject("iiMenu_ServerData");

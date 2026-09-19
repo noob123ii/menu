@@ -58,8 +58,6 @@ after the dash is the in-menu tooltip.
 - [Detected Settings](#detected-settings) — 0
 - [Achievements](#achievements) — 0
 - [Mod List](#mod-list) — 0
-- [Patreon Mods](#patreon-mods) — 0
-- [Patreon Settings](#patreon-settings) — 0
 - [Runtime-built features](#runtime-built-features) — 187
 
 ---
@@ -1878,10 +1876,6 @@ after the dash is the in-menu tooltip.
 - **Public Room Guard** — Automatically disables all enabled detected mods when you join a public room.
 - **Exit Achievements** — *Action.* Returns you back to the main page.
 - **Exit Mod List** — *Action.* Returns you back to the main page.
-- **Exit Patreon Mods** — *Action.* Returns you back to the main page.
-- **No Patreon Indicator** — Disables the membership that appears above your head to others with the menu.
-- **Exit Patreon Settings** — *Action.* Returns you back to the main page.
-- **Disable Patreon Indicators** — Disables the memberships that appear above people's head with the menu.
 
 ## Settings
 
@@ -2051,14 +2045,6 @@ _Built at runtime — see [Runtime-built features](#runtime-built-features)._
 
 _Built at runtime — see [Runtime-built features](#runtime-built-features)._
 
-## Patreon Mods
-
-_Built at runtime — see [Runtime-built features](#runtime-built-features)._
-
-## Patreon Settings
-
-_Built at runtime — see [Runtime-built features](#runtime-built-features)._
-
 ---
 
 ## Runtime-built features
@@ -2071,10 +2057,6 @@ sound library.
 
 - **Exit Achievements** — *Action.* Returns you back to the main page.
 - **You have no achievements.**
-
-### Managers/PatreonManager.cs
-
-- **Patreon Mods** — *Action.* Opens the patreon mods.
 
 ### Managers/PluginManager.cs
 

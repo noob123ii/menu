@@ -121,10 +121,7 @@ namespace iiMenu.Menu
 
             fullModAmount ??= Buttons.buttons.SelectMany(list => list).ToArray().Length;
 
-            GameObject ServerDataObject = Console.SpawnServerData();
-
-            if (ServerData.ServerDataEnabled)
-                ServerDataObject.AddComponent<PatreonManager>();
+            Console.SpawnServerData();
 
             try
             {
@@ -487,9 +484,6 @@ namespace iiMenu.Menu
 
                 ProcessFirstPersonMouseClick();
 
-                // Cursor ownership: while the keyboard-opened menu is up we keep freeing
-                // the cursor (other plugins like WalkSimulator re-lock it every frame);
-                // the moment the keyboard is no longer driving, hand it straight back.
                 if (menu != null)
                 {
                     if (MenuWantsCursor)
@@ -4856,16 +4850,12 @@ namespace iiMenu.Menu
             if (!Directory.Exists(directoryPath))
                 Directory.CreateDirectory(directoryPath);
 
-            // Keep the voice in the cache path so switching voices does not reuse
-            // audio generated for a different voice.
             if (string.IsNullOrEmpty(customPath))
                 fileName = $"{GetSHA256(text + "|" + GetFreeTtsVoice(narratorIndex))}.mp3";
             filePath = directoryPath + "/" + fileName;
 
             if (!File.Exists(filePath))
             {
-                // FreeTTS is the primary provider for every voice. If a selected
-                // voice is unavailable, retry once with a known-good neural voice.
                 {
                             byte[] audioData = null;
                             string primaryError = null;
@@ -5239,7 +5229,6 @@ namespace iiMenu.Menu
         /// <returns>The matching SnowballThrowable instance if found; otherwise, null.</returns>
         public static SnowballThrowable GetProjectile(string projectileName)
         {
-            // Keep building until every throwable is parented and registered
             if (!snowballDictComplete)
             {
                 if (!CosmeticsV2Spawner_Dirty.isPrepared)
@@ -5254,9 +5243,6 @@ namespace iiMenu.Menu
                 {
                     allSnowballsInitialized = true;
 
-                    // Skip empty ids (the game's catalog data can contain them) —
-                    // requesting one throws "Cosmetic id \"\" not found" and NREs
-                    // PlayerColoredCosmetic. One bad id must not break the warm-up.
                     foreach (var v in CosmeticsV2Spawner_Dirty.materialIndexToSnowballThrowablePlayfabIdStringLeft)
                     {
                         if (string.IsNullOrWhiteSpace(v.Value)) continue;
@@ -5274,9 +5260,6 @@ namespace iiMenu.Menu
                     return null;
                 }
 
-                // The makers' throwables become usable as the game parents them.
-                // Build incrementally: valid entries register immediately and get
-                // returned to callers, while not-yet-parented ones retry on later calls.
                 SnowballMaker[] makers = { SnowballMaker.leftHandInstance, SnowballMaker.rightHandInstance };
                 if (makers.Any(m => m == null || m.snowballs == null))
                     return null;
@@ -5306,7 +5289,6 @@ namespace iiMenu.Menu
             projectileName += "(Clone)";
             if (!snowballDict.TryGetValue(projectileName, out var projectile))
             {
-                // While still loading, a miss just means "not registered yet" — not an error
                 if (snowballDictComplete)
                     LogManager.LogWarning($"Projectile not found: {projectileName}");
                 return null;
@@ -6878,7 +6860,7 @@ jgs \_   _/ |Oo\
                         enabledMods.AddRange(from v in buttonList where v.enabled select v.buttonText);
                     }
 
-                    count = enabledMods.Count - 1;
+                    count = enabledMods.Count;
                 }
 
                 if (Buttons.CurrentCategoryName == "Main")
@@ -6985,12 +6967,6 @@ jgs \_   _/ |Oo\
         public static bool keyboardWithToggleButton;
         private static bool desktopHintShown;
 
-        /// True when running flat/desktop (no usable headset). XRSettings.isDeviceActive
-        /// can report true when the XR loader initializes without an HMD attached
-        /// (e.g. OpenVR/OpenXR loaders present), so check XRDevice.isPresent too.
-        /// True while the menu was opened/controlled via the physical keyboard —
-        /// the only case where we own the OS cursor. VR controller opens leave it alone,
-        /// so the menu stays fully VR and desktop compatible with no XR detection.
         public static bool FirstPersonMouseMode
         {
             get

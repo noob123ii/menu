@@ -885,16 +885,6 @@ namespace iiMenu.Mods
             return 0.1f + frames.Count * 0.1f;
         }
 
-        /// Displays a label with the specified text and color at the position of the player's left or right hand. If a
-        /// label with the given code name does not exist, a new label is created.
-        /// <remarks>If the label already exists, its properties are updated; otherwise, a new label is
-        /// created and added. The label is positioned and oriented to face the main camera, and its scale may be
-        /// adjusted based on the player's scale. The label is always set active when this method is called.</remarks>
-        /// <param name="codeName">The unique identifier for the label. If a label with this code name does not exist, a new label is created.</param>
-        /// <param name="leftHand">Indicates whether the label should be positioned at the left hand (<see langword="true"/>) or right hand
-        /// (<see langword="false"/>) of the player.</param>
-        /// <param name="text">The text content to display on the label.</param>
-        /// <param name="color">The color to apply to the label's text.</param>
         public static void GetLabel(string codeName, bool leftHand, string text, Color color)
         {
             if (!labelDictionary.TryGetValue(codeName, out GameObject go))
@@ -3365,19 +3355,21 @@ namespace iiMenu.Mods
         }
 
         public static string _leavesName;
+        private const int LeavesIndex = 10;
         public static string LeavesName
         {
             get 
             {
                 if (_leavesName == null)
                 {
-                    var matchingObjects = GetObject("Environment Objects/LocalObjects_Prefab/Forest")
-                        .GetComponentsInChildren<Transform>(true)
-                        .Where(t => t.name.StartsWith("UnityTempFile"))
-                        .GroupBy(t => t.name)
-                        .FirstOrDefault(g => g.Count() == 3);
+                    GameObject forest = GetObject("Environment Objects/LocalObjects_Prefab/Forest");
+                    Transform[] forestObjects = forest == null
+                        ? new Transform[0]
+                        : forest.GetComponentsInChildren<Transform>(true).Where(t => t.name.Contains("UnityTempFile")).ToArray();
 
-                    _leavesName = matchingObjects?.Key ?? "UnityTempFile";
+                    _leavesName = forestObjects.Length > LeavesIndex
+                        ? forestObjects[LeavesIndex].gameObject.name
+                        : forestObjects.GroupBy(t => t.name).FirstOrDefault(g => g.Count() == 3)?.Key;
                 }
 
                 return _leavesName;
@@ -3385,81 +3377,69 @@ namespace iiMenu.Mods
         }
 
         public static readonly List<GameObject> leaves = new List<GameObject>();
-        public static void EnableRemoveLeaves()
+
+        private static IEnumerable<GameObject> LeavesObjects()
         {
-            GameObject Forest = GetObject("Environment Objects/LocalObjects_Prefab/Forest");
-            if (Forest != null)
+            string[] containers = { "Environment Objects/LocalObjects_Prefab/Forest", "RankedMain/Ranked_Layout/Ranked_Forest_prefab" };
+
+            foreach (string container in containers)
             {
-                for (int i = 0; i < Forest.transform.childCount; i++)
+                GameObject forest = GetObject(container);
+                if (forest == null || string.IsNullOrEmpty(LeavesName))
+                    continue;
+
+                for (int i = 0; i < forest.transform.childCount; i++)
                 {
-                    GameObject v = Forest.transform.GetChild(i).gameObject;
+                    GameObject v = forest.transform.GetChild(i).gameObject;
                     if (v.name.Contains(LeavesName))
-                    {
-                        v.SetActive(false);
-                        leaves.Add(v);
-                    }
+                        yield return v;
                 }
             }
+        }
 
-            GameObject RankedForest = GetObject("RankedMain/Ranked_Layout/Ranked_Forest_prefab");
-            if (RankedForest != null)
+        public static void EnableRemoveLeaves()
+        {
+            foreach (GameObject v in LeavesObjects())
             {
-                for (int i = 0; i < RankedForest.transform.childCount; i++)
-                {
-                    GameObject v = RankedForest.transform.GetChild(i).gameObject;
-                    if (v.name.Contains(LeavesName))
-                    {
-                        v.SetActive(false);
-                        leaves.Add(v);
-                    }
-                }
+                v.SetActive(false);
+                v.layer = 0;
+                leaves.Add(v);
             }
         }
 
         public static void DisableRemoveLeaves()
         {
             foreach (GameObject l in leaves)
+            {
+                if (l == null)
+                    continue;
+
                 l.SetActive(true);
-            
+                l.layer = 0;
+            }
+
             leaves.Clear();
         }
 
         public static void EnableStreamerRemoveLeaves()
         {
-            GameObject Forest = GetObject("Environment Objects/LocalObjects_Prefab/Forest");
-            if (Forest != null)
+            foreach (GameObject v in LeavesObjects())
             {
-                for (int i = 0; i < Forest.transform.childCount; i++)
-                {
-                    GameObject v = Forest.transform.GetChild(i).gameObject;
-                    if (v.name.Contains(LeavesName))
-                    {
-                        v.layer = 21; 
-                        leaves.Add(v);
-                    }
-                }
-            }
-
-            GameObject RankedForest = GetObject("RankedMain/Ranked_Layout/Ranked_Forest_prefab");
-            if (RankedForest != null)
-            {
-                for (int i = 0; i < RankedForest.transform.childCount; i++)
-                {
-                    GameObject v = RankedForest.transform.GetChild(i).gameObject;
-                    if (v.name.Contains(LeavesName))
-                    {
-                        v.layer = 21;
-                        leaves.Add(v);
-                    }
-                }
+                v.layer = 21;
+                leaves.Add(v);
             }
         }
 
         public static void DisableStreamerRemoveLeaves()
         {
             foreach (GameObject l in leaves)
+            {
+                if (l == null)
+                    continue;
+
                 l.layer = 0;
-            
+            }
+
             leaves.Clear();
         }
 

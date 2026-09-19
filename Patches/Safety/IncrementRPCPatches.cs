@@ -50,18 +50,11 @@ namespace iiMenu.Patches.Safety
                 false;
         }
 
-        // Belt-and-suspenders: MonkeAgent.IncrementRPCTracker is the new per-sender RPC
-        // rate limiter that feeds the "too many rpc calls!" SendReport. The three
-        // overloads use by-ref parameters, which attribute patching can't express,
-        // so TargetMethods resolves them. Always returns true — RPCs still flow,
-        // the counter just never increments. Mirrors the existing tracker patches.
         [HarmonyPatch]
         public class NoIncrementRPCTracker
         {
             private static IEnumerable<MethodBase> TargetMethods()
             {
-                // The overloads are non-public — plain GetMethods() misses them,
-                // and an empty result makes Harmony throw "Undefined target method".
                 var trackerMethods = typeof(MonkeAgent).GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static)
                     .Where(m => m.Name == nameof(MonkeAgent.IncrementRPCTracker) && m.GetParameters().Length == 3);
 

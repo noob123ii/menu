@@ -2825,11 +2825,6 @@ Piece Name: {gunTarget.name}";
             GTPlayer.Instance.hoverTiltAdjustsForwardFactor = 0.2f;
         }
 
-        /// Sets hover permission on the local player across game versions.
-        /// The 1.1.145 update removed GTPlayer.SetHoverAllowed in favor of the
-        /// isHoverAllowed property; older builds still expose the two-argument method.
-        /// Resolved via reflection so a future rename degrades to a warning instead
-        /// of a MissingMethodException killing the mod.
         private static MemberInfo hoverAllowedMember;
         private static bool hoverAllowedLookupDone;
 
@@ -4496,7 +4491,6 @@ Piece Name: {gunTarget.name}";
                     SerializeWritePatch.positionOverride = null;
                 }
 
-                // Final packet goes out unspoofed so the server immediately sees our real position again
                 SendSerialize(GorillaTagger.Instance.myVRRig.GetView);
 
                 RPCProtection();

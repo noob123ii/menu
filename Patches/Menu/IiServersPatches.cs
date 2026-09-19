@@ -1,9 +1,16 @@
 using HarmonyLib;
 using GorillaNetworking;
 using iiMenu.Managers;
+using Photon.Voice.Unity;
 
 namespace iiMenu.Patches.Menu
 {
+    [HarmonyPatch(typeof(VoiceConnection), "ConnectUsingSettings")]
+    public class BlockIiServersVoicePatch
+    {
+        static bool Prefix() => !IiServersManager.IsOnIiServers;
+    }
+
     [HarmonyPatch(typeof(PhotonNetworkController), nameof(PhotonNetworkController.AttemptToJoinPublicRoom))]
     public class BlockIiServersPublicJoinPatch
     {

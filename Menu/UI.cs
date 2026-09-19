@@ -153,6 +153,7 @@ namespace iiMenu.Menu
             canvas?.Find("HideMessage")?.gameObject.SetActive(false);
         }
 
+        private static bool legacyPanelWarningLogged;
         private static void HideLegacyTextPanel(Transform textTransform, string value)
         {
             value ??= string.Empty;
@@ -165,6 +166,17 @@ namespace iiMenu.Menu
             Transform panel = textTransform;
             while (panel.parent != null && panel.parent.name != "Canvas" && !panel.name.Contains("Message"))
                 panel = panel.parent;
+
+            if (panel.parent == null)
+            {
+                if (!legacyPanelWarningLogged)
+                {
+                    legacyPanelWarningLogged = true;
+                    LogManager.Log($"HideLegacyTextPanel: refused to hide the scene root {panel.name} for text \"{value}\"");
+                }
+
+                return;
+            }
 
             panel.gameObject.SetActive(false);
         }
@@ -198,6 +210,7 @@ namespace iiMenu.Menu
             {
                 legacyPanelCheckTime = Time.time + 1f;
                 HideLegacyLtsPanel();
+                Managers.IiServersManager.TickRoom();
             }
 
             if (UnityInput.Current.GetKeyDown(KeyCode.Backslash))

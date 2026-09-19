@@ -2134,7 +2134,6 @@ namespace iiMenu.Mods
 
             if ((position - GorillaTagger.Instance.leftHandTransform.position).magnitude > blaster.blaster.maxLagDistance)
             {
-                // No-move shot: one packet reports us at the muzzle so the receiver's range check passes.
                 SerializeWritePatch.positionOverride = position - Vector3.one;
                 try
                 {
@@ -2169,7 +2168,6 @@ namespace iiMenu.Mods
 
             if (!ignoreDistnace && (position - GorillaTagger.Instance.leftHandTransform.position).magnitude > blaster.blaster.maxLagDistance)
             {
-                // No-move shot: one packet reports us at the muzzle so the receiver's range check passes.
                 SerializeWritePatch.positionOverride = position - Vector3.one;
                 try
                 {
@@ -3457,8 +3455,6 @@ namespace iiMenu.Mods
         {
             yield return new WaitForSeconds(0.3f);
 
-            // Always clear the temporary distance override, even if the room
-            // changed while this coroutine was waiting.
             DistancePatch.enabled = false;
 
             if (rigDisabled && VRRig.LocalRig != null)
@@ -3498,8 +3494,6 @@ namespace iiMenu.Mods
             SnowballThrowable left = GetProjectile($"{Projectiles.SnowballName}LeftAnchor");
             SnowballThrowable right = GetProjectile($"{Projectiles.SnowballName}RightAnchor");
 
-            // Wait until the projectiles have registered — same contract as
-            // BetaSpawnSnowball's guard.
             if (left == null || right == null)
                 yield break;
 
@@ -3589,9 +3583,6 @@ namespace iiMenu.Mods
                     SnowballHandIndex = !SnowballHandIndex;
                     Vel = Vel.ClampMagnitudeSafe(50f);
 
-                    // Projectiles register incrementally as the game parents them;
-                    // validate the selected projectile before changing any local
-                    // rig or patch state.
                     GrowingSnowballThrowable GrowingSnowball = GetProjectile($"{Projectiles.SnowballName}{(SnowballHandIndex ? "Right" : "Left")}Anchor") as GrowingSnowballThrowable;
                     if (GrowingSnowball == null || GrowingSnowball.changeSizeEvent == null || GrowingSnowball.snowballThrowEvent == null)
                         return;
@@ -5438,9 +5429,18 @@ namespace iiMenu.Mods
             ZaWarudo_EndCoroutineVariable = null;
         }
 
-        public static int lagIndex = 1;
-        public static int lagAmount;
-        public static float lagDelay;
+        public const int DefaultLagIndex = 4;
+        public const int DefaultLagAmount = 3500;
+        public const float DefaultLagDelay = 8.5f;
+
+        public static readonly int[] lagPowers = { 40, 113, 425, 1000, DefaultLagAmount };
+        public static readonly float[] lagDelays = { 0.1f, 0.25f, 1f, 3f, DefaultLagDelay };
+        public static readonly string[] lagPowerNames = { "Light", "Heavy", "Spike", "Stutter", "Freeze" };
+        public static readonly string[] lagTypeNames = { "Party", "Destroy" };
+
+        public static int lagIndex = DefaultLagIndex;
+        public static int lagAmount = DefaultLagAmount;
+        public static float lagDelay = DefaultLagDelay;
         public static void ChangeLagPower(bool positive = true)
         {
             if (positive)
@@ -5448,34 +5448,39 @@ namespace iiMenu.Mods
             else
                 lagIndex--;
 
-            lagIndex %= 3;
-            if (lagIndex < 0)
-                lagIndex = 2;
-
-            lagAmount = new[] { 40, 113, 425, 1000, 3800 }[lagIndex];
-            lagDelay = new[] { 0.1f, 0.25f, 1f, 3f, 8f }[lagIndex];
-
-            Buttons.GetIndex("Change Lag Power").overlapText = "Change Lag Power <color=grey>[</color><color=green>" + new[] { "Light", "Heavy", "Spike", "Stutter", "Freeze" }[lagIndex] + "</color><color=grey>]</color>";
+            RefreshLagPower();
         }
 
-        public static int lagTypeIndex;
+        public static void RefreshLagPower()
+        {
+            lagIndex %= lagPowers.Length;
+            if (lagIndex < 0)
+                lagIndex += lagPowers.Length;
+
+            lagAmount = lagPowers[lagIndex];
+            lagDelay = lagDelays[lagIndex];
+
+            Buttons.GetIndex("Change Lag Power").overlapText = "Change Lag Power <color=grey>[</color><color=green>" + lagPowerNames[lagIndex] + "</color><color=grey>]</color>";
+        }
+
+        public static int lagTypeIndex = 1;
         public static void ChangeLagType(bool positive = true)
         {
-            string[] lagNames = {
-                "Party",
-                "Destroy"
-            };
-
             if (positive)
                 lagTypeIndex++;
             else
                 lagTypeIndex--;
 
-            lagTypeIndex %= lagNames.Length;
-            if (lagTypeIndex < 0)
-                lagTypeIndex = lagNames.Length - 1;
+            RefreshLagType();
+        }
 
-            Buttons.GetIndex("Change Lag Type").overlapText = "Change Lag Type <color=grey>[</color><color=green>" + lagNames[lagTypeIndex] + "</color><color=grey>]</color>";
+        public static void RefreshLagType()
+        {
+            lagTypeIndex %= lagTypeNames.Length;
+            if (lagTypeIndex < 0)
+                lagTypeIndex += lagTypeNames.Length;
+
+            Buttons.GetIndex("Change Lag Type").overlapText = "Change Lag Type <color=grey>[</color><color=green>" + lagTypeNames[lagTypeIndex] + "</color><color=grey>]</color>";
         }
 
         public static bool IsLagMethodRPC()
@@ -5544,30 +5549,11 @@ namespace iiMenu.Mods
                 }
             } else
             {
-                bool isOp = lagTypeIndex switch
-                {
-                    _ => true
-                };
+                object[] data = { -2147483647, 76, float.NaN };
 
-                byte eventIndex = lagTypeIndex switch
-                {
-                    _ => 204
-                };
+                SendOptions sendOptions = new SendOptions { Encrypt = true, Reliability = false, DeliveryMode = DeliveryMode.Unreliable };
 
-                SendOptions sendOptions = lagTypeIndex switch
-                {
-                    _ => new SendOptions { Encrypt = true, Reliability = false, DeliveryMode = DeliveryMode.Unreliable }
-                };
-
-                object data = lagTypeIndex switch
-                {
-                    _ => new object[] { float.NaN }
-                };
-
-                RaiseEventOptions raiseEventOptions = lagTypeIndex switch 
-                {
-                    _ => new RaiseEventOptions { CachingOption = EventCaching.DoNotCache }
-                };
+                RaiseEventOptions raiseEventOptions = new RaiseEventOptions { CachingOption = EventCaching.DoNotCache };
 
                 switch (target)
                 {
@@ -5583,12 +5569,7 @@ namespace iiMenu.Mods
                 }
 
                 for (int i = 0; i < lagAmount; i++)
-                {
-                    if (isOp)
-                        PhotonNetwork.NetworkingClient.OpRaiseEvent(eventIndex, data, raiseEventOptions, sendOptions);
-                    else
-                        PhotonNetwork.RaiseEvent(eventIndex, data, raiseEventOptions, sendOptions);
-                }
+                    PhotonNetwork.NetworkingClient.OpRaiseEvent(202, data, raiseEventOptions, sendOptions);
             }
 
             RPCProtection();
@@ -6837,7 +6818,6 @@ namespace iiMenu.Mods
 
         public static bool legacyKickFreeze;
 
-        /// Indicates whether event optimization is enabled. When enabled, it reduces network load by limiting certain RPC calls and adjusting serialization rates.
         private static bool _optimizeEvents;
         public static bool OptimizeEvents
         {
@@ -7763,7 +7743,6 @@ namespace iiMenu.Mods
 
                     if (Vector3.Distance(critter.transform.position, GorillaTagger.Instance.bodyCollider.transform.position) > 25f)
                     {
-                        // No-move approach: one packet reports us near the object so the grab range check passes
                         SerializeWritePatch.positionOverride = critter.transform.position - Vector3.one * 5f;
                         try
                         {
@@ -7849,7 +7828,6 @@ namespace iiMenu.Mods
 
                         if (Vector3.Distance(critter.transform.position, GorillaTagger.Instance.bodyCollider.transform.position) > 25f)
                         {
-                            // No-move approach: one packet reports us near the object so the grab range check passes
                             SerializeWritePatch.positionOverride = critter.transform.position - Vector3.one * 5f;
                             try
                             {
@@ -8039,8 +8017,7 @@ namespace iiMenu.Mods
 
                         if (Vector3.Distance(critter.transform.position, GorillaTagger.Instance.bodyCollider.transform.position) > 25f)
                         {
-                            // No-move approach: one packet reports us near the critter so the grab range check passes
-                            SerializeWritePatch.positionOverride = critter.transform.position - Vector3.one * 5f;
+                                SerializeWritePatch.positionOverride = critter.transform.position - Vector3.one * 5f;
                             try
                             {
                                 SendSerialize(GorillaTagger.Instance.myVRRig.GetView);
@@ -8111,7 +8088,6 @@ namespace iiMenu.Mods
 
                     if (Vector3.Distance(critter.transform.position, GorillaTagger.Instance.bodyCollider.transform.position) > 25f)
                     {
-                        // No-move approach: one packet reports us near the object so the grab range check passes
                         SerializeWritePatch.positionOverride = critter.transform.position - Vector3.one * 5f;
                         try
                         {
@@ -8192,7 +8168,6 @@ namespace iiMenu.Mods
 
                         if (Vector3.Distance(critter.transform.position, GorillaTagger.Instance.bodyCollider.transform.position) > 25f)
                         {
-                            // No-move approach: one packet reports us near the object so the grab range check passes
                             SerializeWritePatch.positionOverride = critter.transform.position - Vector3.one * 5f;
                             try
                             {

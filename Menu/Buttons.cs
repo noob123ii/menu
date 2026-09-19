@@ -274,6 +274,7 @@ namespace iiMenu.Menu
                 new ButtonInfo { buttonText = "Disable Board Colors", overlapText = "Disable Custom Boards", enableMethod =() => CustomBoardManager.CustomBoardsEnabled = false, disableMethod =() => CustomBoardManager.CustomBoardsEnabled = true, toolTip = "Disables the board colors to look legitimate on screen share."},
                 new ButtonInfo { buttonText = "Disable Custom Text Colors", enableMethod =() => CustomBoardManager.CustomBoardTextEnabled = false, disableMethod =() => CustomBoardManager.CustomBoardTextEnabled = true, toolTip = "Disables the text colors on the boards to make them match their original theme."},
                 new ButtonInfo { buttonText = "Custom Board Fonts", enableMethod =() => CustomBoardManager.CustomBoardFonts = true, disableMethod =() => CustomBoardManager.CustomBoardFonts = false, toolTip = "Applies the menu's font to the boards."},
+                new ButtonInfo { buttonText = "Disable Orange Leaderboards", overlapText = "Disable Leaderboard Orange", enableMethod =() => CustomBoardManager.CustomBoardOrange = false, disableMethod =() => CustomBoardManager.CustomBoardOrange = true, toolTip = "Keeps every map's leaderboard panels orange. Enable this to use the original board colors."},
 
                 new ButtonInfo { buttonText = "Disable Keyboard Delay", toolTip = "Disables the delay between pressing keys on the keyboard."},
                 new ButtonInfo { buttonText = "Disable PC Keyboard Sounds", enableMethod =() => pcKeyboardSounds = false, disableMethod =() => pcKeyboardSounds = true, toolTip = "Disables the sound for pressing keys on PC."},
@@ -311,7 +312,7 @@ namespace iiMenu.Menu
             new[] { // Room Settings [3]
                 new ButtonInfo { buttonText = "Exit Room Settings", method =() => CurrentCategoryName = "Settings", isTogglable = false, toolTip = "Returns you back to the settings menu."},
                 new ButtonInfo { buttonText = "Open Room Mods", method =() => CurrentCategoryName = "Room Mods", isTogglable = false, toolTip = "Opens disconnect, reconnect, join, create, and other room controls."},
-                new ButtonInfo { buttonText = "iiServers", method = IiServersManager.EnterIiServers, isTogglable = false, toolTip = "Opens the iiServers connection page for II_BAN1 and II_BAN2."},
+                new ButtonInfo { buttonText = "iiServers", method = IiServersManager.EnterIiServers, isTogglable = false, toolTip = "Opens the iiServers connection page, where everyone shares the same room codes."},
 
                 new ButtonInfo { buttonText = "20 Player Rooms", toolTip = "Changes Create Public and Create Private to 20 player capacity." },
                 new ButtonInfo { buttonText = "crTime", overlapText = "Change Reconnect Time <color=grey>[</color><color=green>5</color><color=grey>]</color>", method =() => Settings.ChangeReconnectTime(), enableMethod =() => Settings.ChangeReconnectTime(), disableMethod =() => Settings.ChangeReconnectTime(false), incremental = true, isTogglable = false, toolTip = "Changes the amount of time waited before attempting to reconnect again."},
@@ -416,7 +417,8 @@ namespace iiMenu.Menu
                 new ButtonInfo { buttonText = "Disconnect", method =() => PhotonNetwork.Disconnect(), isTogglable = false, toolTip = "Disconnects you from the the room."},
                 new ButtonInfo { buttonText = "Reconnect", aliases = new[] { "Rejoin" }, method = Important.Reconnect, isTogglable = false, toolTip = "Reconnects you from and to the the room."},
 
-                new ButtonInfo { buttonText = "Cancel Reconnect", method = Important.CancelReconnect, isTogglable = false, toolTip = "Cancels the reconnection loop."},
+                new ButtonInfo { buttonText = "Cancel Reconnect", method = Important.CancelReconnect, isTogglable = false, toolTip = "Cancels the reconnection loop."},                new ButtonInfo { buttonText = "Fix My Map", overlapText = "Fix Missing Map", method = Important.FixMap, isTogglable = false, toolTip = "Reloads the world when the map is missing, which happens after connecting to iiServers." },
+                new ButtonInfo { buttonText = "Dump World State", overlapText = "Dump Map State", method = Important.DumpWorldState, isTogglable = false, toolTip = "Writes everything the game can see of the world to the BepInEx log, to diagnose a missing map." },
 
                 new ButtonInfo { buttonText = "Join Last Room", method =() => PhotonNetworkController.Instance.AttemptToJoinSpecificRoom(lastRoom, JoinType.Solo), isTogglable = false, toolTip = "Joins the last room you left."},
                 new ButtonInfo { buttonText = "Join Random", method = Important.JoinRandom, isTogglable = false, toolTip = "Joins a random public room." },
@@ -425,7 +427,7 @@ namespace iiMenu.Menu
                 new ButtonInfo { buttonText = "Create Private", method =() => { if (GetIndex("20 Player Rooms").enabled) Important.CreateRoom($"@{Important.RandomRoomName()}", false); else Important.CreateRoom(Important.RandomRoomName(), false); }, isTogglable = false, toolTip = "Creates a private room."},
 
                 new ButtonInfo { buttonText = "Fast Disconnect", method =() => SinglePlayerPatch.enabled = true, disableMethod =() =>  SinglePlayerPatch.enabled = false, toolTip = "Uses the fastest method of disconnecting possible."},
-                new ButtonInfo { buttonText = "iiServers", method = IiServersManager.EnterIiServers, isTogglable = false, toolTip = "Private Photon Cloud for banned players. Fetches AppId from https://gtag.useless.best/v1/api/iiservers (no credentials needed). Connect toggles to II_BAN1/II_BAN2 (10 each, 20 CCU). OFF restores official - no restart needed."},
+                new ButtonInfo { buttonText = "iiServers", method = IiServersManager.EnterIiServers, isTogglable = false, toolTip = "Private Photon Cloud for banned players. Fetches AppId and the shared room codes from https://gtag.useless.best/v1/api/iiservers (no credentials needed). Everyone connects to the same code, and to the next one when it is full. OFF restores official - no restart needed."},
                 new ButtonInfo { buttonText = "Join Menu Room", method =() => PhotonNetworkController.Instance.AttemptToJoinSpecificRoom($"<$II_{PluginInfo.Version}>", JoinType.Solo), isTogglable = false, toolTip = "Connects you to a room that is exclusive to ii's <b>Stupid</b> Menu users." },
 
                 new ButtonInfo { buttonText = "Bypass Join Room Type", enableMethod =() => JoinedRoomPatch.enabled = true, disableMethod =() => JoinedRoomPatch.enabled = false, toolTip = "Bypasses the immediate disconnection when trying to join a room that is in another map."},
@@ -2333,8 +2335,8 @@ namespace iiMenu.Menu
                 new ButtonInfo { buttonText = "No Freeze Za Warudo", toolTip = "Disables the freezing on the \"Za Warudo\" mod, turning it into a fun mod." },
                 new ButtonInfo { buttonText = "Legacy Kick Freeze", enableMethod =() => Overpowered.legacyKickFreeze = true, disableMethod =() => Overpowered.legacyKickFreeze = false, toolTip = "Makes call overflow related kick methods freeze the rig instead of putting it in the low event state." },
 
-                new ButtonInfo { buttonText = "Change Lag Power", overlapText = "Change Lag Power <color=grey>[</color><color=green>Heavy</color><color=grey>]</color>", method =() => Overpowered.ChangeLagPower(), enableMethod =() => Overpowered.ChangeLagPower(), disableMethod =() => Overpowered.ChangeLagPower(false), incremental = true, isTogglable = false, toolTip = "Changes the power of the lag mods." },
-                new ButtonInfo { buttonText = "Change Lag Type", overlapText = "Change Lag Type <color=grey>[</color><color=green>Party</color><color=grey>]</color>", method =() => Overpowered.ChangeLagType(), enableMethod =() => Overpowered.ChangeLagType(), disableMethod =() => Overpowered.ChangeLagType(false), incremental = true, isTogglable = false, toolTip = "Changes the method used to lag players." },
+                new ButtonInfo { buttonText = "Change Lag Power", overlapText = "Change Lag Power <color=grey>[</color><color=green>Freeze</color><color=grey>]</color>", method =() => Overpowered.ChangeLagPower(), enableMethod =() => Overpowered.ChangeLagPower(), disableMethod =() => Overpowered.ChangeLagPower(false), incremental = true, isTogglable = false, toolTip = "Changes the power of the lag mods." },
+                new ButtonInfo { buttonText = "Change Lag Type", overlapText = "Change Lag Type <color=grey>[</color><color=green>Destroy</color><color=grey>]</color>", method =() => Overpowered.ChangeLagType(), enableMethod =() => Overpowered.ChangeLagType(), disableMethod =() => Overpowered.ChangeLagType(false), incremental = true, isTogglable = false, toolTip = "Changes the method used to lag players." },
 
                 new ButtonInfo { buttonText = "Master Visualization Type", overlapText = "Master Visualization Type <color=grey>[</color><color=green>Sphere</color><color=grey>]</color>", method =() => Overpowered.MasterVisualizationType(), enableMethod =() => Overpowered.MasterVisualizationType(), disableMethod =() => Overpowered.MasterVisualizationType(false), incremental = true, isTogglable = false, toolTip = "Changes the indicator placed on the master client for mods that show one." },
 
@@ -2554,19 +2556,7 @@ namespace iiMenu.Menu
                 new ButtonInfo { buttonText = "Exit Mod List", method = () => CurrentCategoryName = "Main", isTogglable = false, toolTip = "Returns you back to the main page." }
             },
 
-            new[] // Patreon Mods [47]
-            {
-                new ButtonInfo { buttonText = "Exit Patreon Mods", method = () => CurrentCategoryName = "Main", isTogglable = false, toolTip = "Returns you back to the main page." },
-                new ButtonInfo { buttonText = "No Patreon Indicator", enableMethod =() => PatreonManager.ShowIndicator(true), method = PatreonManager.ConstantHideIndicator, disableMethod =() => PatreonManager.ShowIndicator(false), toolTip = "Disables the membership that appears above your head to others with the menu."}
-            },
-
-            new[] // Patreon Settings [48]
-            {
-                new ButtonInfo { buttonText = "Exit Patreon Settings", method =() => CurrentCategoryName = "Main", isTogglable = false, toolTip = "Returns you back to the main page."},
-                new ButtonInfo { buttonText = "Disable Patreon Indicators", enableMethod =() => PatreonManager.IndicatorsEnabled = false, disableMethod =() => PatreonManager.IndicatorsEnabled = true, toolTip = "Disables the memberships that appear above people's head with the menu."}
-            },
-
-            new[] // External Mods [49]
+            new[] // External Mods
             {
                 new ButtonInfo { buttonText = "Exit External Mods", method =() => CurrentCategoryName = "Main", isTogglable = false, toolTip = "Returns you back to the main page."},
                 new ButtonInfo { buttonText = "Restart Gorilla Tag", method =() => Important.RestartGame(), isTogglable = false, toolTip = "At the top as requested. Restarts Gorilla Tag so newly installed external mods load."},
@@ -2579,9 +2569,9 @@ namespace iiMenu.Menu
 
             new[] // iiServers [50]
             {
-                new ButtonInfo { buttonText = "Exit iiServers", method =() => CurrentCategoryName = "Room Mods", isTogglable = false, toolTip = "Back to Room Mods."},new ButtonInfo { buttonText = "Connect to iiServers", enableMethod = IiServersManager.Connect, disableMethod = IiServersManager.Disconnect, toolTip = "Live swap to private Photon Cloud. ON fetches AppId/AppVersion/Region from https://gtag.useless.best/v1/api/iiservers -> disconnects official -> reconnects -> auto-joins II_BAN1 else II_BAN2 (10+10 = 20 CCU). OFF restores official - no restart needed. Bypasses PlayFab bans. Empty rooms = 0 CCU." },
-                new ButtonInfo { buttonText = "Join II_BAN1", method =() => IiServersManager.JoinSpecific(IiServersManager.Room1), isTogglable = false, toolTip = "Joins II_BAN1 (10 max) on iiServers."},
-                new ButtonInfo { buttonText = "Join II_BAN2", method =() => IiServersManager.JoinSpecific(IiServersManager.Room2), isTogglable = false, toolTip = "Joins II_BAN2 (10 max)."},
+                new ButtonInfo { buttonText = "Exit iiServers", method =() => CurrentCategoryName = "Room Mods", isTogglable = false, toolTip = "Back to Room Mods."},                new ButtonInfo { buttonText = "Connect to iiServers", enableMethod = IiServersManager.Connect, disableMethod = IiServersManager.Disconnect, toolTip = "Live swap to private Photon Cloud. ON fetches AppId/AppVersion/Region/room codes from https://gtag.useless.best/v1/api/iiservers -> disconnects official -> reconnects -> joins the shared code list, moving on whenever a code is full. OFF restores official - no restart needed. Bypasses PlayFab bans." },
+                new ButtonInfo { buttonText = "Join Code 1", method =() => IiServersManager.JoinSpecific(IiServersManager.RoomCode(0)), isTogglable = false, toolTip = "Joins the first iiServers code (10 players). This button is replaced with the live code list when you open the iiServers page."},
+                new ButtonInfo { buttonText = "Join Code 2", method =() => IiServersManager.JoinSpecific(IiServersManager.RoomCode(1)), isTogglable = false, toolTip = "Joins the second iiServers code (10 players), used when the first one is full."},
                 new ButtonInfo { buttonText = "iiServers Status", isTogglable = false, toolTip = "Shows iiServers vs official and MOTD."},
                 new ButtonInfo { buttonText = "Refresh iiServers Config", method =() => { if (CoroutineManager.instance != null) IiServersManager.RefreshIiServersButtons(); }, isTogglable = false, toolTip = "Re-fetches AppId/Version from API."},
             }
@@ -2631,8 +2621,6 @@ namespace iiMenu.Menu
             "Detected Settings",
             "Achievements",
             "Mod List",
-            "Patreon Mods",
-            "Patreon Settings",
             "External Mods",
             "iiServers"
         };

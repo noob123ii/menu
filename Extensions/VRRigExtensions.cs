@@ -49,9 +49,6 @@ namespace iiMenu.Extensions
         public static bool IsSteam(this VRRig rig) =>
             rig.GetPlatform() != "Standalone";
 
-        /// <summary>
-        /// Returns the cosmetic string of a rig. Replaces the removed <c>VRRig.rawCosmeticString</c>.
-        /// </summary>
         public static string CosmeticsString(this VRRig rig) =>
             rig == null ? string.Empty : string.Join("", (System.Collections.IEnumerable)rig._playerOwnedCosmetics);
 

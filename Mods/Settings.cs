@@ -6059,6 +6059,9 @@ exit 0";
                 File.WriteAllText($"{PluginInfo.BaseDirectory}/iiMenu_SystemPrompt.txt", AIManager.SystemPrompt);
         }
 
+        private const int PrefsFormatVersion = 2;
+        private const int LegacyPrefsFieldCount = 78;
+
         public static string SavePreferencesToText()
         {
             string seperator = ";;";
@@ -6165,7 +6168,8 @@ exit 0";
                 Safety.antiReportPressIndex.ToString(),
                 Safety.watchdogIntervalIndex.ToString(),
                 (Safety.visualizePressRadius ? "1" : "0"),
-                Safety.micGateHoldIndex.ToString()
+                Safety.micGateHoldIndex.ToString(),
+                PrefsFormatVersion.ToString()
             };
 
             string settingstext = string.Join(seperator, settings);
@@ -6388,7 +6392,7 @@ exit 0";
                 Overpowered.snowballScale = int.Parse(data[37]) - 1;
                 Overpowered.ChangeSnowballScale();
 
-                Overpowered.lagIndex = int.Parse(data[38]) - 1;
+                Overpowered.lagIndex = (data.Length <= LegacyPrefsFieldCount ? Overpowered.DefaultLagIndex : int.Parse(data[38])) - 1;
                 Overpowered.ChangeLagPower();
 
                 Fun.blockDebounceIndex = int.Parse(data[39]) - 1;
@@ -6512,6 +6516,11 @@ exit 0";
 
             pageButtonType = GetPreferenceInt(textData, 3, 1) - 1;
             Toggle("Change Page Type");
+            if (pageButtonType < 1 || pageButtonType > 6)
+            {
+                pageButtonType = 1;
+                buttonOffset = 2;
+            }
             themeType = GetPreferenceInt(textData, 4, 1) - 1;
             Toggle("Change Menu Theme");
             fontCycle = GetPreferenceInt(textData, 5, 1) - 1;
