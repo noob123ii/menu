@@ -1,0 +1,9 @@
+﻿################################################################################
+# This .gitignore file was automatically created by Microsoft(R) Visual Studio.
+################################################################################
+
+/.vs/iiMenu/FileContentIndex
+/.vs/iiMenu/v18
+/obj/Debug/netstandard2.1/publicized
+/obj/Debug/netstandard2.1
+/obj
