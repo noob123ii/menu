@@ -42,6 +42,8 @@ namespace iiMenu
         public static ManualLogSource PluginLogger => instance.Logger;
         public static bool FirstLaunch;
 
+        //hello
+
         private void Awake()
         {
             // Set console title
