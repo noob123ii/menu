@@ -552,13 +552,7 @@ namespace iiMenu.Menu
                 new ButtonInfo { buttonText = "Recommended Safety Mods", aliases = new[] { "Anti Ban" }, method = Safety.GeneralSafety, disableMethod = Safety.DisableGeneral, toolTip = "Has the effects of some good general safety mods while enabled." },
 
                 new ButtonInfo { buttonText = "No Finger Movement", aliases = new[] { "Disable Fingers" }, method = Safety.NoFinger, toolTip = "Makes your fingers not move, so you can use wall walk without getting called out." },
-                new ButtonInfo {
-                                  buttonText = "Pull Your Id",
-                                  aliases = new[] { "Pulls Id" },
-                                  method = Safety.PullYourID, 
-                                  isTogglable = false,
-                                  toolTip = "Pulls your PlayFab and Photon IDs and logs them to a file."
-                },
+                new ButtonInfo { buttonText = "Pull Your Id", aliases = new[] { "Pulls Id" }, method = Safety.PullYourID, isTogglable = false, toolTip = "Pulls your PlayFab and Photon IDs and logs them to a file." },
 
                 new ButtonInfo { buttonText = "Fake Oculus Menu <color=grey>[</color><color=green>X</color><color=grey>]</color>", method = Safety.FakeOculusMenu, toolTip = "Imitates opening your Oculus menu when holding <color=green>X</color>."},
                 new ButtonInfo { buttonText = "Fake Report Menu <color=grey>[</color><color=green>Y</color><color=grey>]</color>", method = Safety.FakeReportMenu, toolTip = "Imitates opening the report menu when holding <color=green>Y</color>."},
