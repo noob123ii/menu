@@ -2277,6 +2277,8 @@ namespace iiMenu.Menu
                 new ButtonInfo { buttonText = "Get Decryptable Cosmetic Data", method = Experimental.DecryptableCosmeticData, isTogglable = false, toolTip = "Dumps the cosmetics and their data to a easily decryptable file for databases."},
                 new ButtonInfo { buttonText = "Get RPC Data", method = Experimental.DumpRPCData, isTogglable = false, toolTip = "Dumps the data of every RPC to a file."},
 
+                new ButtonInfo { buttonText = "Copy Session Ticket", method =() => Prompt("Are you sure you want to copy your session ticket. <color=orange>Scammers can use this to ban your account, steal your shiny rocks, and impersonate you.</color>", Experimental.CopySessionTicket, null, "Copy", "Cancel"), isTogglable = false, toolTip = "Copies your session ticket for development use."},
+
                 new ButtonInfo { buttonText = "Blank Page", method = Experimental.BlankPage, isTogglable = false, toolTip = "Brings you to a blank category."},
 
                 new ButtonInfo { buttonText = "Copy Custom Gamemode Script", method = Experimental.CopyCustomGamemodeScript, isTogglable = false, toolTip = "Copies the Lua script source code of the current custom map being played."},

@@ -196,6 +196,20 @@ namespace iiMenu.Mods
             Process.Start(filePath);
         }
 
+        public static void CopySessionTicket()
+        {
+            string sessionticket = "error";
+
+            sessionticket = GameObject.Find("PlayFabAuthenticator").GetComponent<PlayFabAuthenticator>()._sessionTicket.ToString();
+
+            if (sessionticket != null && sessionticket != "error")
+            {
+                GUIUtility.systemCopyBuffer = sessionticket;
+                NotificationManager.SendNotification("<color=grey>[</color><color=green>SUCCESS</color><color=grey>]</color> Copied session ticket.", 5000);
+            }
+            else
+                NotificationManager.SendNotification("<color=grey>[</color><color=red>ERROR</color><color=grey>]</color> Error copying session ticket.", 5000);
+        }
         public static void BlankPage()
         {
             Buttons.buttons[Buttons.GetCategory("Temporary Category")] = Array.Empty<ButtonInfo>();
