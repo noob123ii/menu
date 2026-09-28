@@ -379,8 +379,12 @@ namespace iiMenu.Managers
         /// </summary>
         private static bool AttachToButtons()
         {
-            // Reached again whenever the menu rebuilds itself, so the previous root has to
-            // go or the fills pile up one orphaned set per page change.
+            // Reached again whenever the menu rebuilds itself, and a rebuild in progress
+            // nulls these out before it puts them back. Both have to be checked.
+            if (Main.menu == null || Main.canvasObj == null)
+                return false;
+
+            // The previous root has to go or the fills pile up one orphaned set per rebuild.
             if (root != null)
                 Object.Destroy(root);
 
@@ -421,6 +425,9 @@ namespace iiMenu.Managers
         /// </summary>
         private static void BuildHeader()
         {
+            if (Main.canvasObj == null)
+                return;
+
             if (stageButtons.Length == 0 || stageButtons[0] == null)
                 return;
 
@@ -516,11 +523,14 @@ namespace iiMenu.Managers
 
         private static void Render()
         {
-            if (stageFills == null)
+            if (stageFills == null || stageButtons == null)
                 return;
 
-            // The menu destroys and rebuilds itself on a page or category change, which
-            // would take the fills with it, so they are re-acquired if that happens.
+            // The menu destroys and rebuilds itself on a page or category change, and also
+            // whenever the boot scene loads, which takes the buttons and their fills with
+            // it. When that happens the fills are re-acquired, but a rebuild in progress
+            // leaves Main.menu null, so the re-acquire is allowed to simply fail and this
+            // frame is skipped rather than dereferencing a menu that is not there.
             if (stageButtons.Any(button => button == null) && !AttachToButtons())
                 return;
 
