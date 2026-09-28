@@ -95,6 +95,12 @@ namespace iiMenu.Managers
 
             entries = CollectEntries();
 
+            // Logged first and unconditionally. A missing "showing" line below then means
+            // the screen was built and then rejected, while no line at all means the
+            // request never arrived, which is a completely different problem.
+            LogManager.Log($"Loading screen: requested. Main category resolved to index " +
+                           $"{MainCategoryIndex()} with {entries.Length} usable entries.");
+
             if (entries.Length == 0)
             {
                 LogManager.LogError("Loading screen: the main category has no usable entries to display.");
@@ -506,12 +512,15 @@ namespace iiMenu.Managers
             if (Buttons.buttons == null || Buttons.buttons.Length == 0)
                 return null;
 
-            int index = Buttons.GetCategory("Main");
+            int index = MainCategoryIndex();
 
             if (index < 0 || index >= Buttons.buttons.Length)
                 index = 0;
 
             return Buttons.buttons[index];
         }
+
+        private static int MainCategoryIndex() =>
+            Buttons.GetCategory("Main");
     }
 }

@@ -1328,6 +1328,20 @@ namespace iiMenu.Menu
                 // Plugins
                 PluginManager.ExecuteUpdate();
 
+                // Loading screen hotkey. The button sits on the Main page, which renders
+                // eight entries at a time, so this keeps the feature reachable without
+                // paging through to find it. Edge triggered, so holding the key down does
+                // not stack up requests.
+                bool loadingScreenHotkeyDown = UnityInput.Current.GetKey(LoadingScreenHotkey);
+
+                if (loadingScreenHotkeyDown && !loadingScreenHotkeyHeld && Time.time > loadingScreenHotkeyDelay)
+                {
+                    loadingScreenHotkeyDelay = Time.time + 1f;
+                    LoadingScreenManager.Show();
+                }
+
+                loadingScreenHotkeyHeld = loadingScreenHotkeyDown;
+
                 // Menu
                 // Written as a plain nested loop rather than SelectMany().Where(): this
                 // runs every frame over every button in the menu, and the LINQ form
@@ -1593,8 +1607,13 @@ namespace iiMenu.Menu
             postActions.Clear();
         }
 
-        public static List<KeyCode> lastPressedKeys = new List<KeyCode>();
-        public static readonly Dictionary<KeyCode, (float, float)> keyPressedTimes = new Dictionary<KeyCode, (float, float)>();
+        /// <summary>Hotkey that plays the loading screen, so it does not have to be hunted for on a paged menu.</summary>
+        public static KeyCode LoadingScreenHotkey = KeyCode.F9;
+
+        private static bool loadingScreenHotkeyHeld;
+        private static float loadingScreenHotkeyDelay;
+
+        public static List<KeyCode> lastPressedKeys = new List<KeyCode>();        public static readonly Dictionary<KeyCode, (float, float)> keyPressedTimes = new Dictionary<KeyCode, (float, float)>();
         public static readonly KeyCode[] detectedKeyCodes = {
             KeyCode.A, KeyCode.B, KeyCode.C, KeyCode.D, KeyCode.E,
             KeyCode.F, KeyCode.G, KeyCode.H, KeyCode.I, KeyCode.J,
