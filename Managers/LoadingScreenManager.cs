@@ -208,6 +208,16 @@ namespace iiMenu.Managers
             headerFill = null;
             headerText = null;
 
+            // The menu was re-parented onto a camera to hold it in view, so undo that and
+            // let the menu's own positioning take over again.
+            if (presentCamera != null && Main.menu != null &&
+                ReferenceEquals(Main.menu.transform.parent, presentCamera.transform))
+            {
+                Main.menu.transform.SetParent(null, true);
+            }
+
+            presentCamera = null;
+
             if (root != null)
             {
                 Object.Destroy(root);
@@ -257,6 +267,8 @@ namespace iiMenu.Managers
 
         private static void TickInternal()
         {
+            ForceMenuOnScreen();
+
             // Escape skips, read off Unity's InputSystem because the game's own UnityInput
             // wrapper is VR backed and reports nothing when no VR runtime is present.
             if (EscapePressed())
@@ -519,6 +531,42 @@ namespace iiMenu.Managers
             materials.Add(material);
 
             return fill.transform;
+        }
+
+        private static Camera presentCamera;
+
+        /// <summary>
+        /// Holds the menu in front of the camera for as long as the screen is up.
+        ///
+        /// The menu only ever positions itself for a viewer when it is in its keyboard or PC
+        /// presentation, and that path is gated on UnityInput reporting the menu key. With
+        /// no VR runtime UnityInput reports nothing, so the menu is never placed in front of
+        /// anything and the black cover is all that renders. This is the same transform
+        /// Main.ReceneterMenu applies in keyboard mode, copied verbatim, minus the parts
+        /// that depend on input or on the third person camera existing.
+        /// </summary>
+        private static void ForceMenuOnScreen()
+        {
+            if (Main.menu == null)
+                return;
+
+            if (presentCamera == null || !presentCamera.isActiveAndEnabled)
+            {
+                presentCamera = CoverCameras().FirstOrDefault();
+
+                if (presentCamera == null)
+                    return;
+            }
+
+            Transform menu = Main.menu.transform;
+
+            if (menu.parent != presentCamera.transform)
+                menu.SetParent(presentCamera.transform, true);
+
+            // Just inside the cover, so the cover stays behind the menu and the game stays
+            // behind the cover.
+            menu.localPosition = new Vector3(0f, 0f, Mathf.Max(0.05f, CoverDistance - 0.05f));
+            menu.localRotation = Quaternion.Euler(-90f, 90f, 0f);
         }
 
         private static void Render()
