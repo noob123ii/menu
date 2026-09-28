@@ -55,7 +55,13 @@ namespace iiMenu.Mods
 
         public static void SpawnKeyboard()
         {
-            isKeyboardPc = isOnPC || toggleButtonActive && keyboardWithToggleButton;
+            // Without a VR device the on screen keyboard is unusable: its keys are driven
+            // by a hand collider entering a trigger, which cannot happen with no hands to
+            // move. The physical keyboard is then the only input left, but isKeyboardPc
+            // was derived from isOnPC, which only turns true once Q is pressed, and the
+            // on screen keyboard was spawned anyway. Both paths dead, so the field could
+            // be focused but nothing could ever be typed into it.
+            isKeyboardPc = !XRSettings.isDeviceActive || isOnPC || toggleButtonActive && keyboardWithToggleButton;
             inTextInput = true;
             keyboardInput = "";
 
