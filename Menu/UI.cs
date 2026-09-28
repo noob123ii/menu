@@ -284,7 +284,16 @@ namespace iiMenu.Menu
                     value = "255";
             }
 
-            field.text = value;
+            if (field.text == value)
+            {
+                caretIndex = Mathf.Clamp(caret, 0, value.Length);
+                field.caretPosition = caretIndex;
+                ClearSelection();
+                return;
+            }
+
+            if (field.text != value)
+                field.text = value;
 
             caretIndex = Mathf.Clamp(caret, 0, value.Length);
             field.caretPosition = caretIndex;
@@ -308,7 +317,15 @@ namespace iiMenu.Menu
                 return;
 
             string value = field.text ?? "";
-            GUIUtility.systemCopyBuffer = value.Substring(SelectionStart(), SelectionEnd() - SelectionStart());
+            string selected = value.Substring(SelectionStart(), SelectionEnd() - SelectionStart());
+
+            // The Windows clipboard can block if another process is holding it, so it is
+            // never touched from the frame loop.
+            try { GUIUtility.systemCopyBuffer = selected; }
+            catch (System.Exception exception)
+            {
+                LogManager.LogError($"Could not write to the clipboard: {exception.Message}");
+            }
         }
 
         private static void SelectAll(TMP_InputField field)
@@ -345,16 +362,24 @@ namespace iiMenu.Menu
             if (field == null || inTextInput || Instance == null || !Instance.isOpen)
                 return;
 
+            // A control shortcut such as Ctrl+C still arrives here as a character. Letting
+            // it through put a stray control code in the field, and because those codes have
+            // no glyph, every layout pass searched the fallback fonts for them, which is what
+            // made typing crawl and then stall. Control combinations are handled as keys.
+            if (char.IsControl(character))
+                return;
+
+            Keyboard keyboard = Keyboard.current;
+
+            if (keyboard != null &&
+                (keyboard.leftCtrlKey.isPressed || keyboard.rightCtrlKey.isPressed ||
+                 keyboard.leftAltKey.isPressed || keyboard.rightAltKey.isPressed))
+                return;
+
+            if (IsNumeric(field) && !char.IsDigit(character))
+                return;
+
             string text = character.ToString();
-
-            if (IsNumeric(field))
-            {
-                if (!char.IsDigit(character))
-                    return;
-
-                text = character.ToString();
-            }
-
             string value = field.text ?? "";
             int start = HasSelection() ? SelectionStart() : Mathf.Clamp(caretIndex, 0, value.Length);
             int end = HasSelection() ? SelectionEnd() : start;
@@ -403,7 +428,13 @@ namespace iiMenu.Menu
 
                 if (keyboard.vKey.wasPressedThisFrame)
                 {
-                    string clipboard = GUIUtility.systemCopyBuffer;
+                    string clipboard = null;
+
+                    try { clipboard = GUIUtility.systemCopyBuffer; }
+                    catch (System.Exception exception)
+                    {
+                        LogManager.LogError($"Could not read the clipboard: {exception.Message}");
+                    }
 
                     if (!string.IsNullOrEmpty(clipboard))
                     {
