@@ -6004,8 +6004,10 @@ exit 0";
                         UpdateSearch();
                 }
 
-                if (!XRSettings.isDeviceActive)
-                    return;
+                // This used to bail out here when no VR device was active, which made the
+                // non VR branch a few lines below unreachable: the mouse raycast that
+                // branch performs could never run, so nothing on the UI could be pointed
+                // at or selected. The branch already handles both cases, so let it.
 
                 if (clickGuiLine == null)
                 {
@@ -6078,7 +6080,13 @@ exit 0";
                         clickGuiLine.gameObject.SetActive(true);
                 }
 
-                bool trigger = useLeft ? leftTrigger > 0.5f : rightTrigger > 0.5f;
+                // Everything below drives press, release and click off this one flag, and it
+                // used to be the controller trigger only. With no VR device there is no
+                // trigger, so nothing could ever be clicked, including the search field
+                // and the on screen keyboard. Use the left mouse button in that case.
+                bool trigger = !XRSettings.isDeviceActive
+                    ? Mouse.current != null && Mouse.current.leftButton.isPressed
+                    : useLeft ? leftTrigger > 0.5f : rightTrigger > 0.5f;
                 Vector2 currentPos = pointerData.position;
                 pointerData.delta = currentPos - lastPointerPos;
                 lastPointerPos = currentPos;
