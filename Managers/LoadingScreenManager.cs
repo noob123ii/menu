@@ -18,22 +18,21 @@ using Object = UnityEngine.Object;
 namespace iiMenu.Managers
 {
     /// <summary>
-    /// A loading screen styled like the menu, drawn with IMGUI.
-    ///
-    /// Every previous version built world space geometry parented to a camera and came out
-    /// sideways, wrongly scaled, or invisible, because the menu's own layout only makes
+    /// The loading screen, drawn with IMGUI so the orientation and the position cannot be
+    /// wrong. Every earlier version built world space geometry parented to a camera and came
+    /// out sideways, mis-scaled or invisible, because the menu's own layout only makes
     /// sense once its VR presentation rotation is applied and that chain could not be
-    /// reproduced reliably without being able to see the result. IMGUI is drawn by Unity
-    /// in screen space, so there is no camera, no parent, no rotation and no frustum
-    /// arithmetic involved and the orientation cannot be wrong. It also appears in every
-    /// view rather than needing one copy per camera.
+    /// reproduced reliably without being able to see the result.
     ///
-    /// The colours still come from the menu's own gradients, so it reads as the menu even
-    /// though the text is not the menu's TextMeshPro.
+    /// The look is taken from the menu rather than from hardcoded values: the panel, the
+    /// buttons, the borders and the text all come from the same gradients the menu uses,
+    /// and the typeface is the menu's own font handed to IMGUI through
+    /// TMP_FontAsset.sourceFontFile. It follows whatever theme is active, so it stays
+    /// consistent with the menu instead of guessing at the default palette.
     /// </summary>
     public class LoadingScreenGUI : MonoBehaviour
     {
-        private static readonly string[] StageNames =
+        public static readonly string[] StageNames =
         {
             "Initializing",
             "Loading Assets",
@@ -43,19 +42,31 @@ namespace iiMenu.Managers
             "Skip <color=green>[Esc]</color>"
         };
 
-        private const int FillableStages = 5;
-
-        private GUIStyle labelStyle;
-        private GUIStyle titleStyle;
-        private Texture2D backgroundTexture;
-        private Texture2D buttonTexture;
-        private Texture2D fillTexture;
-        private bool stylesReady;
-        private bool drewOnce;
+        /// <summary>Everything except the skip row actually fills.</summary>
+        public const int FillableStages = 5;
 
         public float Progress { get; set; }
         public int Stage { get; set; }
         public int StageCount => FillableStages;
+
+        private const int Border = 2;
+        private const int Gap = 5;
+
+        private GUIStyle titleStyle;
+        private GUIStyle subtitleStyle;
+        private GUIStyle buttonStyle;
+        private GUIStyle percentStyle;
+        private readonly Dictionary<int, Texture2D> solidCache = new Dictionary<int, Texture2D>();
+        private bool stylesReady;
+        private bool drewOnce;
+
+        private Color panel;
+        private Color button;
+        private Color accent;
+        private Color fill;
+        private Color heading;
+        private Color body;
+        private Color dim;
 
         private void Start() => EnsureStyles();
 
@@ -64,9 +75,6 @@ namespace iiMenu.Managers
             if (!LoadingScreenManager.Active)
                 return;
 
-            // Belt and braces: styles are built in Start, but if this ever runs before
-            // Start has (a disabled object, a manual call) build them here rather than
-            // silently returning and showing nothing at all.
             if (!stylesReady)
                 EnsureStyles();
 
@@ -76,43 +84,138 @@ namespace iiMenu.Managers
             Draw();
         }
 
+        private void EnsureStyles()
+        {
+            if (stylesReady)
+                return;
+
+            // Straight from the menu's own gradients, so the screen tracks the active theme.
+            // backgroundColor is a single gradient on the menu, the rest are pairs.
+            panel = Darken(backgroundColor);
+            button = Colour(buttonColors, 0);
+            accent = Colour(buttonColors, 1);
+            heading = Colour(textColors, 0);
+            body = Colour(textColors, 1);
+            dim = new Color(heading.r, heading.g, heading.b, 0.55f);
+
+            // The fill reads as the button being pressed: the same hue pushed brighter, so
+            // it stays inside whatever palette the menu is using.
+            fill = Color.Lerp(button, Color.white, 0.32f);
+            if (fill == button)
+                fill = Color.Lerp(button, accent, 0.5f);
+
+            Font font = MenuFont();
+
+            titleStyle = Style(font, 34, heading, FontStyle.Italic);
+            subtitleStyle = Style(font, 15, dim, FontStyle.Italic);
+            buttonStyle = Style(font, 19, body, FontStyle.Italic);
+            percentStyle = Style(font, 15, dim, FontStyle.Italic);
+
+            stylesReady = true;
+        }
+
+        /// <summary>The menu's own font asset, handed to IMGUI as a legacy Font.</summary>
+        private static Font MenuFont()
+        {
+            try
+            {
+                return activeFont != null ? activeFont.sourceFontFile : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static Color Colour(ExtGradient[] gradients, int index)
+        {
+            try
+            {
+                if (gradients != null && gradients.Length > index && gradients[index] != null)
+                    return gradients[index].GetColor(0);
+            }
+            catch { }
+
+            return Color.gray;
+        }
+
+        /// <summary>The menu's panel colour, forced dark so the text stays readable.</summary>
+        private static Color Darken(ExtGradient gradient)
+        {
+            try
+            {
+                if (gradient == null)
+                    return new Color(0.11f, 0.11f, 0.13f);
+
+                Color color = gradient.GetColor(0);
+                float luma = color.r * 0.299f + color.g * 0.587f + color.b * 0.114f;
+
+                return Color.Lerp(color, Color.black, Mathf.Clamp01(0.3f + luma * 0.5f));
+            }
+            catch
+            {
+                return new Color(0.11f, 0.11f, 0.13f);
+            }
+        }
+
+        private static GUIStyle Style(Font font, int size, Color color, FontStyle fontStyle)
+        {
+            GUIStyle style = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = size,
+                fontStyle = fontStyle,
+                richText = true,
+                wordWrap = false
+            };
+
+            if (font != null)
+                style.font = font;
+
+            style.normal.textColor = color;
+
+            return style;
+        }
+
         private void Draw()
         {
-            // One line proving the draw actually runs, since "built fine but nothing
-            // visible" is otherwise indistinguishable from "built fine and drew fine".
             if (!drewOnce)
             {
                 drewOnce = true;
                 LogManager.Log($"Loading screen: first draw at {Screen.width}x{Screen.height}.");
             }
 
-            float width = Mathf.Min(Screen.width * 0.42f, 520f);
-            float rowHeight = 38f;
-            float padding = 14f;
+            float width = Mathf.Clamp(Screen.width * 0.30f, 340f, 520f);
+            float rowHeight = 42f;
+            float headHeight = 78f;
+            float padding = 16f;
 
-            int rows = StageNames.Length + 2; // stages, skip, plus a gap for the header
-            float height = padding * 2f + rows * rowHeight + 56f;
+            float height = padding * 2f + headHeight + StageNames.Length * (rowHeight + Gap);
 
-            Rect panel = new Rect(
+            Rect outer = new Rect(
                 (Screen.width - width) * 0.5f,
                 (Screen.height - height) * 0.5f,
                 width,
                 height);
 
-            GUI.DrawTexture(panel, backgroundTexture);
+            // Panel with an accent border, matching the menu's outlined look.
+            Fill(outer, accent);
+            Fill(Inset(outer, Border), panel);
 
-            float y = panel.y + padding;
-            float innerWidth = width - padding * 2f;
-            float innerX = panel.x + padding;
+            float x = outer.x + padding;
+            float inner = width - padding * 2f;
+            float y = outer.y + padding;
 
-            // Title, then the overall progress bar, then the stages.
-            Rect titleRect = new Rect(innerX, y, innerWidth, 34f);
-            GUI.Label(titleRect, "ii <b>Reborn</b>", titleStyle);
+            GUI.Label(new Rect(x, y, inner, 40f), "ii <b>Reborn</b>", titleStyle);
             y += 40f;
 
             float overall = (Stage + Mathf.Clamp01(Progress)) / FillableStages;
-            DrawBar(new Rect(innerX, y, innerWidth, 26f), overall, $"Loading {Mathf.RoundToInt(overall * 100f)}%");
-            y += 40f;
+            GUI.Label(new Rect(x, y, inner, 20f), "Loading", subtitleStyle);
+            GUI.Label(new Rect(x, y, inner, 20f), $"{Mathf.RoundToInt(overall * 100f)}%", percentStyle);
+            y += 22f;
+
+            DrawBar(new Rect(x, y, inner, 10f), overall);
+            y += 22f;
 
             for (int i = 0; i < StageNames.Length; i++)
             {
@@ -125,84 +228,74 @@ namespace iiMenu.Managers
                 else
                     fill = 0f;
 
-                DrawBar(new Rect(innerX, y, innerWidth, rowHeight - 8f), fill, StageNames[i]);
-                y += rowHeight;
+                DrawRow(new Rect(x, y, inner, rowHeight), StageNames[i], fill, i == Stage);
+                y += rowHeight + Gap;
             }
         }
 
-        /// <summary>A button face with a fill sweeping left to right across it.</summary>
-        private void DrawBar(Rect rect, float fill, string text)
+        /// <summary>A stage row: accent outlined, dark inside, with the fill sweeping left.</summary>
+        private void DrawRow(Rect rect, string text, float amount, bool active)
         {
-            GUI.DrawTexture(rect, buttonTexture);
+            Fill(rect, active ? accent : Fade(accent, 0.45f));
+            Fill(Inset(rect, 1f), button);
 
-            if (fill > 0f)
-            {
-                Rect filled = new Rect(rect.x, rect.y, rect.width * fill, rect.height);
-                GUI.DrawTexture(filled, fillTexture);
-            }
+            if (amount > 0f)
+                Fill(new Rect(rect.x + 1f, rect.y + 1f, (rect.width - 2f) * amount, rect.height - 2f), fill);
 
-            Rect textRect = new Rect(rect.x, rect.y, rect.width, rect.height);
-            GUI.Label(textRect, text, labelStyle);
+            GUI.Label(rect, text, buttonStyle);
         }
 
-        private void EnsureStyles()
+        private void DrawBar(Rect rect, float progress)
         {
-            if (stylesReady)
-                return;
+            Fill(rect, Fade(accent, 0.5f));
+            Fill(Inset(rect, 1f), button);
 
-            backgroundTexture = Solid(new Color(0.09f, 0.05f, 0.02f, 0.96f));
-            buttonTexture = Solid(new Color(0.30f, 0.16f, 0.03f, 1f));
-            fillTexture = Solid(new Color(0.66f, 0.36f, 0.06f, 1f));
+            float width = (rect.width - 2f) * Mathf.Clamp01(progress);
 
-            Color text = textColors.Length > 1 ? textColors[1].GetColor(0) : Color.white;
-            Color heading = textColors.Length > 0 ? textColors[0].GetColor(0) : Color.white;
-
-            labelStyle = new GUIStyle(GUI.skin.label)
-            {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = 18,
-                fontStyle = FontStyle.Italic,
-                richText = true,
-                wordWrap = false
-            };
-            labelStyle.normal.textColor = text;
-
-            titleStyle = new GUIStyle(labelStyle)
-            {
-                fontSize = 30
-            };
-            titleStyle.normal.textColor = heading;
-
-            stylesReady = true;
+            if (width > 0f)
+                Fill(new Rect(rect.x + 1f, rect.y + 1f, width, rect.height - 2f), fill);
         }
 
-        private static Texture2D Solid(Color color)
+        private static Rect Inset(Rect rect, float amount) =>
+            new Rect(rect.x + amount, rect.y + amount, rect.width - amount * 2f, rect.height - amount * 2f);
+
+        private static Color Fade(Color color, float amount) =>
+            new Color(color.r, color.g, color.b, color.a * (1f - amount));
+
+        private void Fill(Rect rect, Color color) =>
+            GUI.DrawTexture(rect, Solid(color), ScaleMode.StretchToFill, true);
+
+        private Texture2D Solid(Color color)
         {
+            int key = ((Color32)color).GetHashCode();
+            key = key * 397 ^ (int)(color.r * 255f) ^ (int)(color.a * 255f);
+
+            if (solidCache.TryGetValue(key, out Texture2D cached) && cached != null)
+                return cached;
+
             Texture2D texture = new Texture2D(1, 1, TextureFormat.RGBA32, false)
             {
-                hideFlags = HideFlags.HideAndDontSave
+                hideFlags = HideFlags.HideAndDontSave,
+                wrapMode = TextureWrapMode.Clamp
             };
 
             texture.SetPixel(0, 0, color);
             texture.Apply();
+
+            solidCache[key] = texture;
 
             return texture;
         }
 
         private void OnDestroy()
         {
-            DestroyTexture(ref backgroundTexture);
-            DestroyTexture(ref buttonTexture);
-            DestroyTexture(ref fillTexture);
-        }
+            foreach (Texture2D texture in solidCache.Values)
+            {
+                if (texture != null)
+                    Destroy(texture);
+            }
 
-        private static void DestroyTexture(ref Texture2D texture)
-        {
-            if (texture == null)
-                return;
-
-            Destroy(texture);
-            texture = null;
+            solidCache.Clear();
         }
     }
 
@@ -340,8 +433,8 @@ namespace iiMenu.Managers
     }
 
     /// <summary>
-    /// Advances the loading screen. A separate component so the IMGUI component can stay
-    /// purely about drawing.
+    /// Advances the loading screen. Separate from the drawing component so that one can
+    /// stay purely about IMGUI.
     /// </summary>
     internal sealed class LoadingScreenTick : MonoBehaviour
     {
