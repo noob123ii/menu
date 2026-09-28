@@ -8,6 +8,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using GorillaTag;
 using iiMenu.Classes.Menu;
 using iiMenu.Extensions;
@@ -244,12 +245,17 @@ namespace iiMenu.Managers
         }
 
         /// <summary>
-        /// The first person camera, then the third person one. Either can be missing, and
-        /// on a flat-screen PC install that is the normal case, so a missing camera simply
-        /// means one fewer copy.
+        /// The cameras to build a copy on: the first person one, then the third person one.
+        /// A camera is only used if it is actually enabled and has a camera component, and
+        /// if that leaves nothing, Camera.main is used as a last resort so there is always
+        /// at least one copy on screen. On a flat screen install only one of these will
+        /// actually be the view being rendered, which is the same situation the PC menu is
+        /// in when Q is held.
         /// </summary>
         private static IEnumerable<Camera> TargetCameras()
         {
+            List<Camera> found = new List<Camera>();
+
             Camera firstPerson = null;
 
             try
@@ -259,11 +265,30 @@ namespace iiMenu.Managers
             }
             catch { }
 
-            if (firstPerson != null)
-                yield return firstPerson;
+            AddIfUsable(found, firstPerson);
+            AddIfUsable(found, TPC);
 
-            if (TPC != null && TPC != firstPerson)
-                yield return TPC;
+            if (found.Count == 0)
+            {
+                try { AddIfUsable(found, Camera.main); }
+                catch { }
+            }
+
+            LogManager.Log($"Loading screen: cameras considered = {found.Count}" +
+                           (found.Count > 0 ? $" ({string.Join(", ", found.Select(c => c.name))})" : " (none usable)"));
+
+            return found;
+        }
+
+        private static void AddIfUsable(List<Camera> found, Camera camera)
+        {
+            if (camera == null || found.Contains(camera))
+                return;
+
+            if (!camera.isActiveAndEnabled)
+                return;
+
+            found.Add(camera);
         }
 
         private static Screen BuildScreen(Camera camera, string[] labels)
@@ -281,7 +306,9 @@ namespace iiMenu.Managers
             Transform rootTransform = root.transform;
 
             // Parented to the camera and sitting straight ahead of it, which is the same
-            // trick the PC menu uses when Q is held.
+            // trick the PC menu uses when Q is held. The layer is copied from the camera so
+            // it lands inside that camera's culling mask rather than relying on the default.
+            root.layer = camera.gameObject.layer;
             rootTransform.SetParent(camera.transform, false);
             rootTransform.localPosition = new Vector3(0f, 0f, ViewDistance);
             rootTransform.localRotation = Quaternion.identity;
@@ -349,7 +376,20 @@ namespace iiMenu.Managers
                 CreateLabel(canvasObject.transform, position, labels[i], textColor, maxFontSize, buttonHeight);
             }
 
+            // CreatePrimitive and new GameObject both land on the default layer, so the
+            // whole tree is stamped onto the camera's layer once at the end rather than
+            // remembering to do it at every construction site.
+            SetLayerRecursive(rootTransform, root.layer);
+
             return screen;
+        }
+
+        private static void SetLayerRecursive(Transform target, int layer)
+        {
+            target.gameObject.layer = layer;
+
+            for (int i = 0; i < target.childCount; i++)
+                SetLayerRecursive(target.GetChild(i), layer);
         }
 
         private static void CreateBackdrop(Transform parent, float gridWidth, float gridHeight)

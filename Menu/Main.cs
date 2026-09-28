@@ -1328,19 +1328,22 @@ namespace iiMenu.Menu
                 // Plugins
                 PluginManager.ExecuteUpdate();
 
-                // Loading screen hotkey. The button sits on the Main page, which renders
-                // eight entries at a time, so this keeps the feature reachable without
-                // paging through to find it. Edge triggered, so holding the key down does
-                // not stack up requests.
-                bool loadingScreenHotkeyDown = UnityInput.Current.GetKey(LoadingScreenHotkey);
+                // Loading screen. Plays on the rising edge of the menu opening, so it comes
+                // up on its own without having to go and find a button, and the button
+                // replays it on demand. Edge triggered so holding the menu key open does
+                // not restart it every frame.
+                bool loadingScreenMenuOpen = isMenuButtonHeld;
 
-                if (loadingScreenHotkeyDown && !loadingScreenHotkeyHeld && Time.time > loadingScreenHotkeyDelay)
+                if (PlayLoadingScreenOnMenuOpen && loadingScreenMenuOpen && !loadingScreenMenuHeld &&
+                    Time.time > loadingScreenMenuCooldown)
                 {
-                    loadingScreenHotkeyDelay = Time.time + 1f;
+                    // Cooldown so flicking the menu key open and shut does not rebuild the
+                    // whole grid every time.
+                    loadingScreenMenuCooldown = Time.time + 1f;
                     LoadingScreenManager.Show();
                 }
 
-                loadingScreenHotkeyHeld = loadingScreenHotkeyDown;
+                loadingScreenMenuHeld = loadingScreenMenuOpen;
 
                 // Menu
                 // Written as a plain nested loop rather than SelectMany().Where(): this
@@ -1607,11 +1610,15 @@ namespace iiMenu.Menu
             postActions.Clear();
         }
 
-        /// <summary>Hotkey that plays the loading screen, so it does not have to be hunted for on a paged menu.</summary>
-        public static KeyCode LoadingScreenHotkey = KeyCode.F9;
+        /// <summary>
+        /// Plays the loading screen whenever the menu is opened. It used to hang off a
+        /// function key, but the game's own input wrapper does not report function keys,
+        /// so the trigger now rides the menu itself.
+        /// </summary>
+        public static bool PlayLoadingScreenOnMenuOpen = true;
 
-        private static bool loadingScreenHotkeyHeld;
-        private static float loadingScreenHotkeyDelay;
+        private static bool loadingScreenMenuHeld;
+        private static float loadingScreenMenuCooldown;
 
         public static List<KeyCode> lastPressedKeys = new List<KeyCode>();        public static readonly Dictionary<KeyCode, (float, float)> keyPressedTimes = new Dictionary<KeyCode, (float, float)>();
         public static readonly KeyCode[] detectedKeyCodes = {
