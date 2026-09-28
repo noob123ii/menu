@@ -18,6 +18,8 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using TMPro;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 using static iiMenu.Menu.Main;
 using static iiMenu.Utilities.AssetUtilities;
@@ -38,6 +40,8 @@ namespace iiMenu.Menu
                 isOpen = false;
 
             uiPrefab = LoadObject<GameObject>("UI");
+
+            DiagnoseEventSystem();
 
             Transform canvas = uiPrefab.transform.Find("Canvas");
             prefabCanvas = canvas.GetComponent<Canvas>();
@@ -196,6 +200,37 @@ namespace iiMenu.Menu
         private TMP_InputField b;
         private TMP_InputField textInput;
 
+        /// <summary>
+        /// Reports what the scene's EventSystem actually is. A TMP_InputField only receives
+        /// typed characters through an input module that feeds it text, and a VR oriented
+        /// one never will, so this needs to be known rather than assumed.
+        /// </summary>
+        private static void DiagnoseEventSystem()
+        {
+            try
+            {
+                var eventSystem = UnityEngine.EventSystems.EventSystem.current;
+                if (eventSystem == null)
+                {
+                    LogManager.Log("[InputDiag] EventSystem: NONE in scene");
+                    return;
+                }
+
+                List<string> parts = new List<string>();
+                foreach (var component in eventSystem.GetComponents<Component>())
+                    parts.Add(component == null ? "null" : component.GetType().Name);
+
+                LogManager.Log($"[InputDiag] EventSystem: {eventSystem.GetType().Name} components=[{string.Join(", ", parts)}]");
+
+                foreach (var found in eventSystem.GetComponents<UnityEngine.EventSystems.BaseInputModule>())
+                    LogManager.Log($"[InputDiag]   input module: {found.GetType().FullName} enabled={found.enabled} active={found.gameObject.activeInHierarchy}");
+            }
+            catch (System.Exception exception)
+            {
+                LogManager.Log($"[InputDiag] EventSystem probe threw: {exception.GetType().Name}: {exception.Message}");
+            }
+        }
+
         /// <summary>Which ControlUI field currently has focus, if any.</summary>
         private static TMP_InputField focusedControlField;
 
@@ -305,7 +340,60 @@ namespace iiMenu.Menu
             }
         }
 
-        private void LateUpdate() => UpdateControlField();
+        private void LateUpdate()
+        {
+            UpdateControlField();
+        }
+
+        /// <summary>
+        /// Handles clicking the ControlUI fields without going through the EventSystem.
+        ///
+        /// The scene runs XRUIInputModule alongside two InputSystemUIInputModules, all
+        /// enabled, and the XR one wins. Buttons still fire, because a click only needs a
+        /// pointer event, but nothing ever delivers text to a TMP_InputField, so the name
+        /// and R/G/B fields could be pressed and never edited. Rather than fight three
+        /// competing modules, this raycasts the prefab's own GraphicRaycaster directly,
+        /// which is known to work, and focuses the field itself.
+        /// </summary>
+        private static void UpdateControlUiPointer()
+        {
+            if (prefabRaycaster == null || Instance == null || !Instance.isOpen)
+                return;
+
+            try
+            {
+                if (Mouse.current == null || !Mouse.current.leftButton.wasPressedThisFrame)
+                    return;
+
+                var pointer = new PointerEventData(UnityEngine.EventSystems.EventSystem.current)
+                {
+                    position = Mouse.current.position.ReadValue()
+                };
+
+                controlHits.Clear();
+                prefabRaycaster.Raycast(pointer, controlHits);
+
+                for (int i = 0; i < controlHits.Count; i++)
+                {
+                    // The ray normally lands on a child of the field, such as its text
+                    // area, so the component has to be looked up through the parents too.
+                    TMP_InputField field = controlHits[i].gameObject.GetComponent<TMP_InputField>()
+                        ?? controlHits[i].gameObject.GetComponentInParent<TMP_InputField>();
+
+                    if (field != null)
+                    {
+                        FocusControlField(field);
+                        return;
+                    }
+                }
+            }
+            catch (System.Exception exception)
+            {
+                LogManager.Log($"[InputDiag] ControlUI pointer threw: {exception.GetType().Name}: {exception.Message}");
+            }
+        }
+
+        private static readonly List<RaycastResult> controlHits = new List<RaycastResult>();
 
         private Image controlBackground;
         private List<TextMeshProUGUI> textObjects;
@@ -316,6 +404,8 @@ namespace iiMenu.Menu
 
         private void Update()
         {
+            UpdateControlUiPointer();
+
             if (Time.time >= roomTickTime)
             {
                 roomTickTime = Time.time + 1f;

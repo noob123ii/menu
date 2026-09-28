@@ -6008,6 +6008,25 @@ exit 0";
                 button.SetActive(keyboardInput.IsNullOrEmpty() || button.name.ClearTags().Replace(" ", "").ToLower().Contains(keyboardInput.Replace(" ", "").ToLower()));
         }
 
+        private static string currentPosMouse()
+        {
+            try { return Mouse.current != null ? $"{Mouse.current.position.ReadValue()}" : "no-mouse"; }
+            catch { return "threw"; }
+        }
+
+        private static string RaycastNames(int fromIndex)
+        {
+            try
+            {
+                if (uiResults.Count <= fromIndex) return "none";
+                List<string> names = new List<string>();
+                for (int i = fromIndex; i < uiResults.Count && names.Count < 6; i++)
+                    names.Add(uiResults[i].gameObject.name);
+                return string.Join(",", names);
+            }
+            catch { return "threw"; }
+        }
+
         public static void ClickGUI()
         {
             if (menu == null)
@@ -6074,8 +6093,17 @@ exit 0";
                     // ControlUI (the name field and the R/G/B fields) lives on the UI
                     // prefab's own canvas, not the menu canvas, so it was never pointed at
                     // and could not be clicked. Raycast that canvas as well.
+                    int menuHits = uiResults.Count;
+
                     if (UI.prefabRaycaster != null)
+                    {
                         UI.prefabRaycaster.Raycast(pointerData, uiResults);
+                        LogManager.Log($"[InputDiag] raycast at {currentPosMouse()} menuHits={menuHits} prefabHits={uiResults.Count - menuHits} names={RaycastNames(menuHits)}");
+                    }
+                    else
+                    {
+                        LogManager.Log($"[InputDiag] raycast at {currentPosMouse()} menuHits={menuHits} prefabRaycaster=NULL");
+                    }
 
                     currentUI = uiResults.Count > 0 ? uiResults[0].gameObject : null;
 
