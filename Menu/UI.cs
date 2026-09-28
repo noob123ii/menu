@@ -430,11 +430,14 @@ namespace iiMenu.Menu
 
                 if (control.wasPressedThisFrame)
                 {
-                    string text = upper ? shifted : plain;
+                    // A digits only field ignores shift and caps lock entirely. Composing
+                    // the shifted symbol first turned every digit into a character that was
+                    // then rejected, so those fields stopped accepting anything at all while
+                    // caps lock was on.
+                    bool numeric = IsNumeric(field);
+                    string text = numeric ? plain : upper ? shifted : plain;
 
-                    LogManager.Log($"[KeyDiag] {key} -> '{text}' shift={shift} caps={caps}");
-
-                    if (IsNumeric(field) && !char.IsDigit(text[0]))
+                    if (numeric && !char.IsDigit(text[0]))
                         continue;
 
                     InsertText(field, text);
