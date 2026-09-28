@@ -4397,7 +4397,12 @@ namespace iiMenu.Menu
 
             if (SmoothGunPointer)
             {
-                GunPositionSmoothed = Vector3.Lerp(GunPositionSmoothed, EndPosition, Time.deltaTime * 6f);
+                // The smoothed value starts at the world origin, so the first frame would
+                // lerp the pointer away from 0,0,0 towards the aim point. Seed it instead.
+                GunPositionSmoothed = GunPositionSmoothed == Vector3.zero
+                    ? EndPosition
+                    : Vector3.Lerp(GunPositionSmoothed, EndPosition, Time.deltaTime * 6f);
+
                 EndPosition = GunPositionSmoothed;
             }
 
