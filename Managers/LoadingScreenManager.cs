@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Linq;
 using iiMenu.Classes.Menu;
 using iiMenu.Menu;
+using TMPro;
 using UnityEngine;
 using static iiMenu.Menu.Main;
 using Object = UnityEngine.Object;
@@ -114,12 +115,32 @@ namespace iiMenu.Managers
             stylesReady = true;
         }
 
-        /// <summary>The menu's own font asset, handed to IMGUI as a legacy Font.</summary>
+        /// <summary>
+        /// The menu's own font, handed to IMGUI as a legacy Font.
+        ///
+        /// The menu does not load its fonts until Main.OnLaunch runs, which is when the
+        /// user presses Q. This screen plays by itself before that, so at the moment it
+        /// draws, activeFont is still the LiberationSans default and AgencyFB is still
+        /// null. Reading activeFont directly here would hand IMGUI the wrong typeface and
+        /// the screen would not look like the menu. Initialize the fonts first, then
+        /// prefer the font the menu is actually using.
+        /// </summary>
         private static Font MenuFont()
         {
             try
             {
-                return activeFont != null ? activeFont.sourceFontFile : null;
+                if (AgencyFB == null)
+                    InitializeFonts();
+
+                // On launch the menu sets activeFont to AgencyFB, but the player can change
+                // it in settings, and that choice is applied on launch too. So once
+                // activeFont is no longer the default it is the font the menu is showing
+                // and it wins; otherwise fall back to the menu's default typeface.
+                TMP_FontAsset asset =
+                    (activeFont != null && activeFont != LiberationSans) ? activeFont :
+                    (AgencyFB != null ? AgencyFB : activeFont);
+
+                return asset != null ? asset.sourceFontFile : null;
             }
             catch
             {
