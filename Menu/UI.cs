@@ -215,11 +215,28 @@ namespace iiMenu.Menu
                 return;
 
             focusedControlField = field;
-            field.ActivateInputField();
 
+            // Deliberately not calling ActivateInputField. All the keyboard handling here is
+            // ours, so TMP does not need Unity's focus, and taking it made the field
+            // intercept pointer events meant for the buttons beside it.
             caretIndex = field.text != null ? field.text.Length : 0;
             ClearSelection();
             SyncSelection(field);
+        }
+
+        /// <summary>Releases focus, so clicks elsewhere are not swallowed by a field.</summary>
+        private static void BlurControlField()
+        {
+            TMP_InputField field = focusedControlField;
+
+            if (field != null)
+            {
+                try { field.DeactivateInputField(); }
+                catch (System.Exception) { }
+            }
+
+            focusedControlField = null;
+            ClearSelection();
         }
 
         /// <summary>Mirrors the local caret and selection into the field so TMP draws them.</summary>
@@ -375,9 +392,37 @@ namespace iiMenu.Menu
         /// rather than using the input system's text callback, so that a held key can be
         /// repeated on our own schedule.
         /// </summary>
+        private static bool capsLockActive;
+        private static bool capsLockSeen;
+
+        /// <summary>
+        /// Tracks caps lock from the press edge rather than the reported key state. The OS
+        /// updates the indicator asynchronously, so reading it in the same frame as the press
+        /// can still return the previous value, which is why toggling it and then typing
+        /// immediately was unreliable.
+        /// </summary>
+        private static bool ReadCapsLock(Keyboard keyboard)
+        {
+            if (!capsLockSeen)
+            {
+                capsLockActive = keyboard.capsLockKey.isPressed;
+                capsLockSeen = true;
+            }
+            else if (keyboard.capsLockKey.wasPressedThisFrame)
+            {
+                capsLockActive = !capsLockActive;
+            }
+
+            return capsLockActive;
+        }
+
         private static void UpdateTypedText(Keyboard keyboard, bool shift)
         {
             TMP_InputField field = focusedControlField;
+
+            // Caps lock inverts the shift, and the two together cancel out.
+            bool caps = ReadCapsLock(keyboard);
+            bool upper = shift ^ caps;
 
             foreach ((Key key, string plain, string shifted) in textKeys)
             {
@@ -385,7 +430,9 @@ namespace iiMenu.Menu
 
                 if (control.wasPressedThisFrame)
                 {
-                    string text = shift ? shifted : plain;
+                    string text = upper ? shifted : plain;
+
+                    LogManager.Log($"[KeyDiag] {key} -> '{text}' shift={shift} caps={caps}");
 
                     if (IsNumeric(field) && !char.IsDigit(text[0]))
                         continue;
@@ -597,6 +644,11 @@ namespace iiMenu.Menu
                         return;
                     }
                 }
+
+                // A click that lands on no field releases the current one, so typing does
+                // not keep going into a field the player has clicked away from.
+                if (focusedControlField != null)
+                    BlurControlField();
             }
             catch (System.Exception exception)
             {
