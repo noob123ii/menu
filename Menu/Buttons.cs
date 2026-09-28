@@ -64,6 +64,8 @@ namespace iiMenu.Menu
                 new ButtonInfo { buttonText = "External Mods", method = ExternalModsManager.EnterExternalMods, isTogglable = false, toolTip = "One-click installer for external mods (Utilla, WalkSim Fixed, TooMuchInfo, LibrePad). Always pulls the latest GitHub release and drops the .dll into BepInEx/plugins — then restart."},
                 new ButtonInfo { buttonText = "Detected Mods", method = Detected.EnterDetectedTab, isTogglable = false, toolTip = "Opens the detected mods."},
 
+                new ButtonInfo { buttonText = "Loading Screen", method = LoadingScreenManager.Show, isTogglable = false, toolTip = "Plays a loading screen, one entry at a time, on both the first person and third person cameras at once."},
+
                 new ButtonInfo { buttonText = "Achievements", method = AchievementManager.EnterAchievementTab, isTogglable = false, toolTip = "Opens the achievements page."},
                 new ButtonInfo { buttonText = "Credits", method =() => CurrentCategoryName = "Credits", isTogglable = false, toolTip = "Opens the credits page."}
             },

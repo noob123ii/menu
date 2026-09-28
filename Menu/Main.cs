@@ -6620,6 +6620,10 @@ namespace iiMenu.Menu
 
         public static void UnloadMenu()
         {
+            // The loading screen parents itself to the cameras rather than to the menu, so
+            // it has to be torn down explicitly or it would outlive the plugin.
+            try { LoadingScreenManager.Hide(); } catch { }
+
             // Release the microphone and dispose the speech recognizers before the engine tears down,
             // leaving them alive through shutdown is what crashes the game on exit
             try { Settings.DictationOff(); }
