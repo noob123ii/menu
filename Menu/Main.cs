@@ -4467,6 +4467,15 @@ namespace iiMenu.Menu
                 GunLine.positionCount = Step;
                 GunLine.SetPosition(0, StartPosition);
                 GunLine.SetPosition(Step - 1, EndPosition);
+
+                // Only some gun variations have a case that fills the points in between.
+                // The rest would leave them at the origin, drawing a stray line to 0,0,0,
+                // so they default to a straight line.
+                if (gunVariation < 1 || gunVariation > 12)
+                {
+                    for (int i = 1; i < Step - 1; i++)
+                        GunLine.SetPosition(i, Vector3.Lerp(StartPosition, EndPosition, i / (Step - 1f)));
+                }
             }
 
             switch (gunVariation)
@@ -4654,6 +4663,12 @@ namespace iiMenu.Menu
                 verletPointCount = GunLine.positionCount;
                 verletPositions = new Vector3[verletPointCount];
                 verletPrevPositions = new Vector3[verletPointCount];
+
+                // A fresh array is all zeros, and the velocity below is measured against
+                // the previous position, so leaving it zeroed made every point take off
+                // from the world origin. Seed it to where the line already is.
+                for (int i = 0; i < verletPointCount; i++)
+                    verletPrevPositions[i] = GunLine.GetPosition(i);
             }
 
             if (gunVariation != 7 && verletPositions != null)
