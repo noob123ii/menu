@@ -312,6 +312,19 @@ namespace iiMenu.Managers
         /// Builds the screen. The menu's own statics are pointed at private objects for the
         /// duration so its button builder draws into this screen, then restored.
         /// </summary>
+        /// <summary>
+        /// Builds one screen, in the camera's own local space with no rotation on the root
+        /// at all.
+        ///
+        /// The menu is laid out for a viewer holding it in a VR hand, on axes that only
+        /// make sense once the menu's Euler(-90, 90, 0) presentation rotation is applied.
+        /// Reproducing that rotation by hand went wrong repeatedly, and a wrongly rotated
+        /// screen is worse than a plainly laid out one. Camera local space needs no
+        /// rotation: +X is right, +Y is up, +Z is away from the viewer, which is the
+        /// standard world space canvas setup. The menu's colours, font and italic styling
+        /// still come from the menu, so it reads as the menu, just laid out squarely
+        /// instead of in the menu's VR orientation.
+        /// </summary>
         private static bool Build(Camera camera)
         {
             if (addButtonMethod == null)
@@ -322,12 +335,6 @@ namespace iiMenu.Managers
                     null,
                     new[] { typeof(float), typeof(int), typeof(ButtonInfo) },
                     null);
-
-                if (addButtonMethod == null)
-                {
-                    LogManager.LogError("Loading screen: could not find Main.AddButton, aborting.");
-                    return false;
-                }
             }
 
             GameObject savedMenu = Main.menu;
@@ -339,46 +346,31 @@ namespace iiMenu.Managers
 
             try
             {
+                Layout layout = Layout.For(camera);
+
                 built = CreateRoot(camera);
-                CreateBackground(built);
+                CreateBackground(built, layout);
                 CreateCanvas(built);
 
-                Transform[] fills = new Transform[StageNames.Length + 1];
+                Transform[] fills = new Transform[StageNames.Length];
 
                 for (int i = 0; i < StageNames.Length; i++)
                 {
-                    var info = new ButtonInfo
-                    {
-                        buttonText = StageNames[i],
-                        isTogglable = false,
-                        method = () => { },
-                        toolTip = "Loading."
-                    };
-
-                    if (!AddStage(built, i, info, out Transform button))
-                        return false;
-
-                    fills[i] = CreateFill(button);
+                    Transform button = CreateButton(built, layout, i);
+                    fills[i] = CreateFill(button, layout);
+                    CreateLabel(built, layout, i, StageNames[i]);
                 }
 
-                var skipInfo = new ButtonInfo
-                {
-                    buttonText = SkipText,
-                    overlapText = SkipLabel,
-                    isTogglable = false,
-                    method = Hide,
-                    toolTip = "Ends the loading screen early."
-                };
-
-                AddStage(built, StageNames.Length, skipInfo, out _);
-
-                CreateHeader(built);
+                CreateLabel(built, layout, StageNames.Length, SkipLabel);
+                CreateHeader(built, layout);
 
                 roots.Add(built);
                 fillSets.Add(fills);
             }
-            catch
+            catch (Exception exception)
             {
+                LogManager.LogError($"Loading screen: build failed on {camera.name}. {exception}");
+
                 if (built != null)
                     Object.Destroy(built);
 
@@ -386,7 +378,6 @@ namespace iiMenu.Managers
             }
             finally
             {
-                // Always put the menu back exactly as it was, even if the build threw.
                 Main.menu = savedMenu;
                 Main.menuBackground = savedBackground;
                 Main.canvasObj = savedCanvas;
@@ -396,74 +387,70 @@ namespace iiMenu.Managers
             return true;
         }
 
+        /// <summary>Screen space measurements derived from the camera it is being drawn for.</summary>
+        private struct Layout
+        {
+            public float VisibleWidth;
+            public float VisibleHeight;
+            public float PanelWidth;
+            public float PanelHeight;
+            public float ButtonWidth;
+            public float ButtonHeight;
+            public float TopY;
+            public float Depth;
+
+            public static Layout For(Camera camera)
+            {
+                Layout layout = new Layout();
+
+                layout.VisibleHeight = 2f * ViewDistance * Mathf.Tan(camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
+                layout.VisibleWidth = layout.VisibleHeight * Mathf.Max(camera.aspect, 0.1f);
+
+                // A tall panel, like the PC menu, sized as a fraction of the view.
+                layout.PanelHeight = layout.VisibleHeight * 0.86f;
+                layout.PanelWidth = layout.PanelHeight * 0.34f;
+                layout.ButtonWidth = layout.PanelWidth * 0.86f;
+                layout.ButtonHeight = layout.PanelHeight / (StageNames.Length + 2.4f);
+                layout.TopY = layout.PanelHeight / 2f;
+                layout.Depth = 0.01f;
+
+                return layout;
+            }
+
+            public float RowY(int index) =>
+                TopY - index * ButtonHeight * 1.18f - ButtonHeight * 0.5f;
+        }
+
         /// <summary>
         /// Hands one button to the menu's own builder, then finds the cube it made so a fill
         /// can be parented onto it. Buttons are found by ButtonCollider.relatedText.
         /// </summary>
-        private static bool AddStage(GameObject builtRoot, int index, ButtonInfo info, out Transform button)
-        {
-            float offset = index * Main.ButtonDistance;
-
-            addButtonMethod.Invoke(null, new object[] { offset, index, info });
-
-            button = null;
-
-            foreach (Transform child in builtRoot.transform)
-            {
-                ButtonCollider collider = child.GetComponent<ButtonCollider>();
-
-                if (collider != null && collider.relatedText == info.buttonText)
-                {
-                    button = child;
-                    break;
-                }
-            }
-
-            if (button == null)
-            {
-                LogManager.LogError($"Loading screen: the menu builder did not produce a button for '{info.buttonText}'.");
-                return false;
-            }
-
-            return true;
-        }
-
         private static GameObject CreateRoot(Camera camera)
         {
-            // Same cube the menu makes for itself, and the same scale, with the renderer
-            // destroyed exactly as the menu does.
-            GameObject built = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            Object.Destroy(built.GetComponent<BoxCollider>());
-            Object.Destroy(built.GetComponent<Renderer>());
+            GameObject built = new GameObject("iiMenu_LoadingScreen");
 
-            built.name = "iiMenu_LoadingScreen";
+            // Camera local space, no rotation. +X right, +Y up, +Z away from the viewer.
             built.transform.SetParent(camera.transform, false);
             built.transform.localPosition = new Vector3(0f, 0f, ViewDistance);
-            built.transform.localRotation = Quaternion.Euler(-90f, 90f, 0f);
-            built.transform.localScale = new Vector3(0.1f, 0.3f, 0.3825f) * menuScale;
-
-            Main.menu = built;
+            built.transform.localRotation = Quaternion.identity;
+            built.transform.localScale = Vector3.one;
 
             return built;
         }
 
-        private static void CreateBackground(GameObject builtRoot)
+        private static void CreateBackground(GameObject builtRoot, Layout layout)
         {
             GameObject back = GameObject.CreatePrimitive(PrimitiveType.Cube);
             Object.Destroy(back.GetComponent<Collider>());
 
             back.name = "Background";
             back.transform.SetParent(builtRoot.transform, false);
-            back.transform.localPosition = new Vector3(0.50f, 0f, 0f);
-            back.transform.rotation = Quaternion.identity;
-            back.transform.localScale = Main.thinMenu
-                ? new Vector3(0.1f, 1f, 1f)
-                : new Vector3(0.1f, 1.5f, 1f);
+            back.transform.localPosition = new Vector3(0f, 0f, -layout.Depth * 2f);
+            back.transform.localRotation = Quaternion.identity;
+            back.transform.localScale = new Vector3(layout.PanelWidth, layout.PanelHeight, layout.Depth);
 
             ColorChanger colorChanger = back.AddComponent<ColorChanger>();
             colorChanger.colors = backgroundColor;
-
-            Main.menuBackground = back;
         }
 
         private static void CreateCanvas(GameObject builtRoot)
@@ -477,21 +464,36 @@ namespace iiMenu.Managers
             scaler.dynamicPixelsPerUnit = 2500f;
 
             created.AddComponent<GraphicRaycaster>();
-
-            canvasObject = created;
-            Main.canvasObj = created;
         }
 
-        private static Transform CreateFill(Transform button)
+        private static Transform CreateButton(GameObject builtRoot, Layout layout, int index)
+        {
+            GameObject button = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            Object.Destroy(button.GetComponent<Collider>());
+
+            button.name = "LoadingButton";
+            button.transform.SetParent(builtRoot.transform, false);
+            button.transform.localPosition = new Vector3(0f, layout.RowY(index), 0f);
+            button.transform.localRotation = Quaternion.identity;
+            button.transform.localScale = new Vector3(layout.ButtonWidth, layout.ButtonHeight, layout.Depth);
+
+            // Colour comes from ColorChanger, the same path the menu's own buttons use.
+            ColorChanger colorChanger = button.AddComponent<ColorChanger>();
+            colorChanger.colors = buttonColors[0];
+
+            return button.transform;
+        }
+
+        private static Transform CreateFill(Transform button, Layout layout)
         {
             GameObject fill = GameObject.CreatePrimitive(PrimitiveType.Cube);
             Object.Destroy(fill.GetComponent<Collider>());
 
             fill.name = "LoadingFill";
             fill.transform.SetParent(button, false);
-            fill.transform.localPosition = new Vector3(0f, 0f, -FillDepth);
+            fill.transform.localPosition = Vector3.zero;
             fill.transform.localRotation = Quaternion.identity;
-            fill.transform.localScale = new Vector3(0f, 1.3f, 0.08f);
+            fill.transform.localScale = new Vector3(0f, 0.9f, 1.4f);
 
             ColorChanger colorChanger = fill.AddComponent<ColorChanger>();
             colorChanger.colors = buttonColors.Length > 1 ? buttonColors[1] : buttonColors[0];
@@ -499,22 +501,26 @@ namespace iiMenu.Managers
             return fill.transform;
         }
 
-        /// <summary>
-        /// The "Loading n%" bar, placed above the first stage using the menu's own label
-        /// placement maths so it lines up with the button column.
-        /// </summary>
-        private static void CreateHeader(GameObject builtRoot)
+        private static void CreateLabel(GameObject builtRoot, Layout layout, int index, string text)
         {
-            float extra = Main.ButtonDistance * 1.4f;
+            TextMeshPro label = NewLabel(
+                new Vector3(0f, layout.RowY(index), layout.Depth * 1.6f),
+                new Vector2(layout.ButtonWidth, layout.ButtonHeight),
+                text);
 
+            label.AddComponent<UIColorChanger>().colors = textColors[1];
+        }
+
+        private static void CreateHeader(GameObject builtRoot, Layout layout)
+        {
             GameObject bar = GameObject.CreatePrimitive(PrimitiveType.Cube);
             Object.Destroy(bar.GetComponent<Collider>());
 
             bar.name = "LoadingBar";
             bar.transform.SetParent(builtRoot.transform, false);
-            bar.transform.localPosition = new Vector3(0.56f, 0f, 0.28f + extra);
+            bar.transform.localPosition = new Vector3(0f, layout.TopY - layout.ButtonHeight * 0.35f, 0f);
             bar.transform.localRotation = Quaternion.identity;
-            bar.transform.localScale = new Vector3(0.09f, 0.55f, Main.ButtonDistance * 0.8f);
+            bar.transform.localScale = new Vector3(layout.ButtonWidth, layout.ButtonHeight * 0.75f, layout.Depth);
 
             ColorChanger barChanger = bar.AddComponent<ColorChanger>();
             barChanger.colors = buttonColors[0];
@@ -524,22 +530,29 @@ namespace iiMenu.Managers
 
             fill.name = "LoadingBarFill";
             fill.transform.SetParent(bar.transform, false);
-            fill.transform.localPosition = new Vector3(-0.09f, 0f, -FillDepth);
+            fill.transform.localPosition = Vector3.zero;
             fill.transform.localRotation = Quaternion.identity;
-            fill.transform.localScale = new Vector3(0f, 0.55f, 0.08f);
+            fill.transform.localScale = new Vector3(0f, 0.9f, 1.4f);
 
             ColorChanger fillChanger = fill.AddComponent<ColorChanger>();
             fillChanger.colors = buttonColors.Length > 1 ? buttonColors[1] : buttonColors[0];
 
             headerFills.Add(fill.transform);
 
-            headerTexts.Add(NewLabel(new Vector3(0.064f, 0f, 0.111f + extra), "Loading 0%"));
+            headerTexts.Add(NewLabel(
+                new Vector3(0f, layout.TopY - layout.ButtonHeight * 0.35f, layout.Depth * 1.6f),
+                new Vector2(layout.ButtonWidth, layout.ButtonHeight * 0.75f),
+                "Loading 0%"));
 
-            TextMeshPro title = NewLabel(new Vector3(0.064f, 0f, 0.111f + extra * 2f), "ii <b>Reborn</b>");
-            title.rectTransform.sizeDelta = new Vector2(0.28f, 0.05f);
+            TextMeshPro title = NewLabel(
+                new Vector3(0f, layout.TopY + layout.ButtonHeight * 0.45f, layout.Depth * 1.6f),
+                new Vector2(layout.ButtonWidth, layout.ButtonHeight),
+                "ii <b>Reborn</b>");
+
+            title.AddComponent<UIColorChanger>().colors = textColors[0];
         }
 
-        private static TextMeshPro NewLabel(Vector3 position, string text)
+        private static TextMeshPro NewLabel(Vector3 position, Vector2 size, string text)
         {
             TextMeshPro label = new GameObject
             {
@@ -558,12 +571,13 @@ namespace iiMenu.Managers
             label.enableAutoSizing = true;
             label.fontSizeMin = 0;
 
-            label.AddComponent<UIColorChanger>().colors = textColors[0];
-
             RectTransform rect = label.rectTransform;
-            rect.sizeDelta = new Vector2(0.24f, 0.05f);
+
+            // Identity rotation: the canvas is already camera aligned, so a further
+            // 180/90/90 would turn the text on its side.
+            rect.sizeDelta = size;
             rect.localPosition = position;
-            rect.rotation = Quaternion.Euler(new Vector3(180f, 90f, 90f));
+            rect.localRotation = Quaternion.identity;
 
             FollowMenuSettings(label);
 
@@ -609,15 +623,12 @@ namespace iiMenu.Managers
             if (fill == null)
                 return;
 
-            Transform button = fill.parent;
-            float full = button != null ? button.localScale.x : 0.09f;
-            float height = button != null ? button.localScale.y : 1.3f;
-            float grown = full * progress;
-
-            // The cube scales from its centre, so shifting it by half of what it has grown
+            // The fill is a child of the button, so its scale and offset are fractions of
+            // the button rather than world measurements: 1 across is the full button.
+            // The cube grows from its centre, so shifting it by half of what it has grown
             // keeps its left edge pinned to the left of the button.
-            fill.localScale = new Vector3(grown, height, 0.08f);
-            fill.localPosition = new Vector3(-full / 2f + grown / 2f, 0f, -FillDepth);
+            fill.localScale = new Vector3(Mathf.Clamp01(progress), 0.9f, 1.4f);
+            fill.localPosition = new Vector3(-0.5f + progress * 0.5f, 0f, 0f);
         }
 
         private static void SetHeaderFill(Transform fill, float progress)
@@ -625,12 +636,11 @@ namespace iiMenu.Managers
             if (fill == null || fill.parent == null)
                 return;
 
-            Transform bar = fill.parent;
-            float full = bar.localScale.x;
-            float grown = full * progress;
+            // Child of the bar, so fractions of it rather than world measurements.
+            float value = Mathf.Clamp01(progress);
 
-            fill.localScale = new Vector3(grown, bar.localScale.y, 0.08f);
-            fill.localPosition = new Vector3(-full / 2f + grown / 2f, 0f, -FillDepth);
+            fill.localScale = new Vector3(value, 0.9f, 1.4f);
+            fill.localPosition = new Vector3(-0.5f + value * 0.5f, 0f, 0f);
         }
 
         private static float OverallProgress() =>
