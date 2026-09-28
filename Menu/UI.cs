@@ -420,9 +420,7 @@ namespace iiMenu.Menu
         {
             TMP_InputField field = focusedControlField;
 
-            // Caps lock inverts the shift, and the two together cancel out.
             bool caps = ReadCapsLock(keyboard);
-            bool upper = shift ^ caps;
 
             foreach ((Key key, string plain, string shifted) in textKeys)
             {
