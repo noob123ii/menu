@@ -51,14 +51,26 @@ namespace iiMenu.Managers
         private Texture2D buttonTexture;
         private Texture2D fillTexture;
         private bool stylesReady;
+        private bool drewOnce;
 
         public float Progress { get; set; }
         public int Stage { get; set; }
         public int StageCount => FillableStages;
 
+        private void Start() => EnsureStyles();
+
         private void OnGUI()
         {
-            if (!LoadingScreenManager.Active || !stylesReady)
+            if (!LoadingScreenManager.Active)
+                return;
+
+            // Belt and braces: styles are built in Start, but if this ever runs before
+            // Start has (a disabled object, a manual call) build them here rather than
+            // silently returning and showing nothing at all.
+            if (!stylesReady)
+                EnsureStyles();
+
+            if (!stylesReady)
                 return;
 
             Draw();
@@ -66,6 +78,14 @@ namespace iiMenu.Managers
 
         private void Draw()
         {
+            // One line proving the draw actually runs, since "built fine but nothing
+            // visible" is otherwise indistinguishable from "built fine and drew fine".
+            if (!drewOnce)
+            {
+                drewOnce = true;
+                LogManager.Log($"Loading screen: first draw at {Screen.width}x{Screen.height}.");
+            }
+
             float width = Mathf.Min(Screen.width * 0.42f, 520f);
             float rowHeight = 38f;
             float padding = 14f;
