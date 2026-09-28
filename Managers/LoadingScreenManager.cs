@@ -14,14 +14,15 @@ using iiMenu.Extensions;
 using iiMenu.Menu;
 using TMPro;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using static iiMenu.Menu.Main;
 using Object = UnityEngine.Object;
 
 namespace iiMenu.Managers
 {
     /// <summary>
-    /// Drives <see cref="LoadingScreenManager"/>. A top level type rather than a nested one
-    /// so Unity is happy to attach it to a GameObject.
+    /// Drives <see cref="LoadingScreenManager"/>. Top level rather than nested so Unity is
+    /// happy to attach it to a GameObject.
     /// </summary>
     internal sealed class LoadingScreenTick : MonoBehaviour
     {
@@ -33,75 +34,73 @@ namespace iiMenu.Managers
     }
 
     /// <summary>
-    /// A loading screen built inside the menu's own transform space, so it looks and
-    /// behaves exactly like the menu does: it is a child of the menu and its labels live
-    /// on the menu's canvas. That means it shows up in every view the menu shows up in,
-    /// which is how you get the first person and third person copies without building two
-    /// separate things.
+    /// A fake loading screen that is the real menu, with a Loading category open.
     ///
-    /// Every button is a plain cube on its default material with the colour assigned
-    /// through Renderer.material.color, and every label is a TextMeshPro built with the
-    /// same recipe the menu uses for its own button text. Both of those are copied
-    /// deliberately: hand-rolled custom materials and hand-derived world space font sizes
-    /// both produced a screen that rendered as empty black boxes.
+    /// The stage buttons are genuine menu buttons added through the normal Buttons API, so
+    /// the menu itself draws them: same font, same colours, same italics, same everything.
+    /// A progress fill is then parented onto each one and grown from left to right, one
+    /// stage at a time, plus a "Loading n%" bar across the top.
     ///
-    /// The button names are the things being loaded, and each one keeps the pressed
-    /// colour while it fills left to right, one at a time.
+    /// Nothing here builds its own text or its own materials, which is the only reason this
+    /// version works. Earlier attempts hand-rolled a world space canvas and hand-built
+    /// materials, and both rendered as a black rectangle with no text.
     /// </summary>
     public static class LoadingScreenManager
     {
-        /// <summary>True while the loading screen is on screen.</summary>
+        /// <summary>True while the loading screen is up.</summary>
         public static bool Active { get; private set; }
 
         /// <summary>Plays the loading screen automatically every time the menu is opened.</summary>
         public static bool PlayOnMenuOpen = true;
 
-        /// <summary>How long a single entry takes to fill, in seconds.</summary>
-        public static float EntryDuration = 0.08f;
+        /// <summary>Seconds each stage takes to fill.</summary>
+        public static float StageDuration = 0.55f;
 
-        /// <summary>How long the finished screen lingers before it tears itself down.</summary>
-        public static float LingerDuration = 0.6f;
+        /// <summary>Seconds the finished screen stays up before it tears itself down.</summary>
+        public static float LingerDuration = 0.8f;
 
-        /// <summary>Entries per row.</summary>
-        public static int Columns = 3;
+        /// <summary>The category the fake stage buttons live in.</summary>
+        public const string CategoryName = "Loading";
 
-        /// <summary>Button height, matching the menu's own buttons.</summary>
-        private const float ButtonHeight = 1.3f;
+        private const string SkipButtonText = "Skip Loading";
 
-        private const float StartX = 0.56f;
-        private const float StartY = 0.28f;
-        private const float ColumnStep = 0.15f;
+        private static readonly string[] StageNames =
+        {
+            "Initializing",
+            "Loading Assets",
+            "Applying Patches",
+            "Loading Preferences",
+            "Ready"
+        };
+
+        /// <summary>
+        /// How far toward the viewer a fill sits from the face of its button. The menu puts
+        /// its button text on a shallower z slope than the buttons themselves, so this is
+        /// kept deliberately tiny: enough to win the depth test against the button it sits
+        /// on, small enough not to creep in front of the label.
+        /// </summary>
+        private const float FillDepth = 0.004f;
 
         private static readonly List<Material> materials = new List<Material>();
 
         private static GameObject runner;
         private static GameObject root;
-        private static Transform[] buttons;
-        private static Transform[] fills;
-        private static string[] entries = Array.Empty<string>();
-        private static int entryIndex;
-        private static float entryProgress;
+        private static Transform header;
+        private static Transform headerFill;
+        private static TextMeshPro headerText;
+        private static Transform[] stageButtons;
+        private static Transform[] stageFills;
+        private static int previousCategory = -1;
+        private static int stageIndex;
+        private static float stageProgress;
         private static float lingerTimer;
         private static bool completed;
+        private static bool categoryAdded;
 
-        /// <summary>Builds the loading screen. Safe to call while one is already up.</summary>
+        /// <summary>Opens the loading screen. Safe to call while one is already up.</summary>
         public static void Show()
         {
             Hide();
-
-            entries = CollectEntries();
-
-            // Logged before anything else happens. A missing "showing" line below then means
-            // the screen was built and then rejected, while no line at all means the request
-            // never arrived, which is a completely different problem.
-            LogManager.Log($"Loading screen: requested, main category index {MainCategoryIndex()}, " +
-                           $"{entries.Length} usable entries.");
-
-            if (entries.Length == 0)
-            {
-                LogManager.LogError("Loading screen: the main category has no usable entries to display.");
-                return;
-            }
 
             if (Main.menu == null)
                 Main.CreateMenu();
@@ -112,17 +111,23 @@ namespace iiMenu.Managers
                 return;
             }
 
-            Build(entries);
+            previousCategory = Buttons.CurrentCategoryIndex;
+            AddLoadingCategory();
 
-            if (buttons == null)
+            // Hand the menu a category it knows nothing about and it would clamp back to a
+            // valid index, so the new category is appended before the index is set.
+            Buttons.CurrentCategoryIndex = Buttons.GetCategory(CategoryName);
+            Main.ReloadMenu();
+
+            if (!AttachToButtons())
             {
-                LogManager.LogError("Loading screen: build produced nothing, cannot show.");
+                LogManager.LogError("Loading screen: could not find the stage buttons after the reload.");
                 Hide();
                 return;
             }
 
-            entryIndex = 0;
-            entryProgress = 0f;
+            stageIndex = 0;
+            stageProgress = 0f;
             lingerTimer = 0f;
             completed = false;
             Active = true;
@@ -131,20 +136,20 @@ namespace iiMenu.Managers
             runner.AddComponent<LoadingScreenTick>();
 
             Render();
-
-            LogManager.Log($"Loading screen: showing {entries.Length} entries.");
         }
 
-        /// <summary>Tears the loading screen down and releases everything it allocated.</summary>
+        /// <summary>Tears everything down and puts the menu back where it was.</summary>
         public static void Hide()
         {
             Active = false;
             completed = false;
-            entryIndex = 0;
-            entryProgress = 0f;
-            entries = Array.Empty<string>();
-            buttons = null;
-            fills = null;
+            stageIndex = 0;
+            stageProgress = 0f;
+            stageButtons = null;
+            stageFills = null;
+            header = null;
+            headerFill = null;
+            headerText = null;
 
             if (root != null)
             {
@@ -165,12 +170,22 @@ namespace iiMenu.Managers
                 Object.Destroy(runner);
                 runner = null;
             }
+
+            RestoreCategory();
         }
 
         internal static void Tick()
         {
             if (!Active)
                 return;
+
+            // Escape skips, read off Unity's InputSystem because the game's own UnityInput
+            // wrapper is VR backed and reports nothing when no VR runtime is present.
+            if (EscapePressed())
+            {
+                Hide();
+                return;
+            }
 
             if (completed)
             {
@@ -182,132 +197,157 @@ namespace iiMenu.Managers
                 return;
             }
 
-            entryProgress += EntryDuration <= 0f ? 1f : Time.deltaTime / EntryDuration;
+            stageProgress += StageDuration <= 0f ? 1f : Time.deltaTime / StageDuration;
 
-            if (entryProgress < 1f)
+            if (stageProgress < 1f)
             {
                 Render();
                 return;
             }
 
-            entryProgress = 0f;
-            entryIndex++;
+            stageProgress = 0f;
+            stageIndex++;
 
-            if (entryIndex >= entries.Length)
+            if (stageIndex >= StageNames.Length)
                 completed = true;
 
             Render();
         }
 
-        private static void Build(string[] labels)
+        /// <summary>
+        /// Finds the stage buttons the menu just drew and parents a fill onto each one.
+        /// They are located by ButtonCollider.relatedText rather than by index, so this
+        /// survives the page arrows, search results and alphabetising getting in the way.
+        /// </summary>
+        private static bool AttachToButtons()
         {
-            int columns = Mathf.Clamp(Columns, 1, labels.Length);
+            // Reached again whenever the menu rebuilds itself, so the previous root has to
+            // go or the fills pile up one orphaned set per page change.
+            if (root != null)
+                Object.Destroy(root);
 
             root = new GameObject("iiMenu_LoadingScreen");
-
-            // A child of the menu, at the menu's own scale and orientation, so everything
-            // below inherits the transform chain the real menu already renders correctly
-            // through.
             root.transform.SetParent(Main.menu.transform, false);
-            root.transform.localPosition = Vector3.zero;
-            root.transform.localRotation = Quaternion.identity;
-            root.transform.localScale = Vector3.one;
 
-            buttons = new Transform[labels.Length];
-            fills = new Transform[labels.Length];
+            stageButtons = new Transform[StageNames.Length];
+            stageFills = new Transform[StageNames.Length];
 
-            float rowStep = Main.ButtonDistance * 0.8f;
+            Dictionary<string, Transform> found = new Dictionary<string, Transform>();
 
-            for (int i = 0; i < labels.Length; i++)
+            foreach (Transform child in Main.menu.transform)
             {
-                int column = i % columns;
-                int row = i / columns;
+                ButtonCollider collider = child.GetComponent<ButtonCollider>();
 
-                float x = StartX + column * ColumnStep;
-                float y = StartY - row * rowStep;
+                if (collider == null || string.IsNullOrEmpty(collider.relatedText))
+                    continue;
 
-                var position = new Vector3(x, y, 0.28f);
-
-                buttons[i] = CreateButton(position);
-                fills[i] = CreateFill(position);
-                CreateLabel(x, y, labels[i]);
+                found[collider.relatedText] = child;
             }
+
+            for (int i = 0; i < StageNames.Length; i++)
+            {
+                if (!found.TryGetValue(StageNames[i], out Transform button))
+                    return false;
+
+                stageButtons[i] = button;
+                stageFills[i] = CreateFill(button);
+            }
+
+            BuildHeader();
+
+            return true;
         }
 
         /// <summary>
-        /// Pushes progress out to every fill. One shared progress value means the copies in
-        /// each view can never drift apart.
+        /// The "Loading n%" bar across the top, sitting just above the first stage button.
         /// </summary>
-        private static void Render()
+        private static void BuildHeader()
         {
-            if (fills == null)
+            if (stageButtons.Length == 0 || stageButtons[0] == null)
                 return;
 
-            for (int i = 0; i < fills.Length; i++)
+            Transform anchor = stageButtons[0];
+            float step = Main.ButtonDistance * 0.8f;
+
+            GameObject bar = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            Object.Destroy(bar.GetComponent<Collider>());
+
+            bar.name = "LoadingHeader";
+            bar.transform.SetParent(anchor.parent, false);
+            bar.transform.localRotation = Quaternion.identity;
+            bar.transform.localScale = new Vector3(0.09f, 1.3f, step);
+            bar.transform.localPosition = anchor.localPosition + new Vector3(0f, 0f, step * 1.6f);
+
+            Color tint = Main.backgroundColor.GetCurrentColor();
+            Material barMaterial = bar.GetComponent<Renderer>().material;
+            barMaterial.color = tint;
+            materials.Add(barMaterial);
+
+            header = bar.transform;
+
+            GameObject fill = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            Object.Destroy(fill.GetComponent<Collider>());
+
+            fill.name = "LoadingHeaderFill";
+            fill.transform.SetParent(bar.transform, false);
+            fill.transform.localRotation = Quaternion.identity;
+            fill.transform.localScale = new Vector3(0f, 1.3f, 0.08f);
+            fill.transform.localPosition = new Vector3(-0.09f, 0f, -FillDepth);
+
+            Color fillTint = Main.buttonColors.Length > 0
+                ? Main.buttonColors[0].GetCurrentColor()
+                : Color.white;
+
+            Material fillMaterial = fill.GetComponent<Renderer>().material;
+            fillMaterial.color = fillTint;
+            materials.Add(fillMaterial);
+
+            headerFill = fill.transform;
+
+            headerText = new GameObject
             {
-                float fill;
+                transform =
+                {
+                    parent = Main.canvasObj.transform
+                }
+            }.AddComponent<TextMeshPro>();
 
-                if (i < entryIndex)
-                    fill = 1f;
-                else if (i == entryIndex)
-                    fill = Mathf.Clamp01(entryProgress);
-                else
-                    fill = 0f;
+            headerText.font = activeFont;
+            headerText.fontStyle = activeFontStyle;
+            headerText.richText = true;
+            headerText.alignment = TextAlignmentOptions.Center;
+            headerText.text = "Loading 0%";
+            headerText.fontSize = 1;
+            headerText.enableAutoSizing = true;
+            headerText.fontSizeMin = 0;
 
-                SetFill(fills[i], fill);
-            }
+            headerText.AddComponent<UIColorChanger>().colors = Main.textColors[0];
+
+            RectTransform rect = headerText.rectTransform;
+            rect.sizeDelta = new Vector2(0.24f, 0.05f);
+            rect.localPosition = bar.transform.localPosition + new Vector3(0.064f, 0f, -0.111f);
+            rect.rotation = Quaternion.Euler(new Vector3(180f, 90f, 90f));
+
+            FollowMenuSettings(headerText);
         }
 
-        private static void SetFill(Transform fill, float progress)
-        {
-            if (fill == null)
-                return;
-
-            // The cube scales from its centre, so shifting it by half of whatever it has
-            // grown keeps its left edge pinned to the left of the button.
-            float full = 0.09f;
-            float grown = full * progress;
-
-            fill.localScale = new Vector3(grown, ButtonHeight, Main.ButtonDistance * 0.8f);
-            fill.localPosition = new Vector3(StartX - full / 2f + grown / 2f, fill.localPosition.y, 0.28f);
-        }
-
-        private static Transform CreateButton(Vector3 position)
-        {
-            GameObject button = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            Object.Destroy(button.GetComponent<Collider>());
-
-            button.name = "LoadingButton";
-            button.transform.SetParent(root.transform, false);
-            button.transform.localPosition = position;
-            button.transform.localRotation = Quaternion.identity;
-            button.transform.localScale = new Vector3(0.09f, ButtonHeight, Main.ButtonDistance * 0.8f);
-
-            // Deliberately the primitive's own material. Assigning a custom material here
-            // was what rendered every button black: the colour was being written to
-            // Material.color, which targets _Color, and the shaders that were being handed
-            // over do not read _Color.
-            Color tint = Main.buttonColors.Length > 0 ? Main.buttonColors[0].GetCurrentColor() : Color.gray;
-
-            Material material = button.GetComponent<Renderer>().material;
-            material.color = tint;
-            materials.Add(material);
-
-            return button.transform;
-        }
-
-        private static Transform CreateFill(Vector3 position)
+        private static Transform CreateFill(Transform button)
         {
             GameObject fill = GameObject.CreatePrimitive(PrimitiveType.Cube);
             Object.Destroy(fill.GetComponent<Collider>());
 
             fill.name = "LoadingFill";
-            fill.transform.SetParent(root.transform, false);
-            fill.transform.localPosition = position;
+            fill.transform.SetParent(button, false);
             fill.transform.localRotation = Quaternion.identity;
-            fill.transform.localScale = new Vector3(0f, ButtonHeight, Main.ButtonDistance * 0.8f);
+            fill.transform.localPosition = new Vector3(0f, 0f, -FillDepth);
+            fill.transform.localScale = new Vector3(0f, 1.3f, 0.08f);
 
-            Color tint = Main.buttonColors.Length > 1 ? Main.buttonColors[1].GetCurrentColor() : Color.black;
+            // A slightly different shade to the button it sits on, so a filled stage reads
+            // as the pressed colour. The button's own material drives this one.
+            Renderer buttonRenderer = button.GetComponent<Renderer>();
+            Color tint = Main.buttonColors.Length > 1
+                ? Main.buttonColors[1].GetCurrentColor()
+                : buttonRenderer != null ? buttonRenderer.material.color : Color.white;
 
             Material material = fill.GetComponent<Renderer>().material;
             material.color = tint;
@@ -316,93 +356,133 @@ namespace iiMenu.Managers
             return fill.transform;
         }
 
-        private static void CreateLabel(float x, float y, string text)
+        private static void Render()
         {
-            TextMeshPro label = new GameObject
+            if (stageFills == null)
+                return;
+
+            // The menu destroys and rebuilds itself on a page or category change, which
+            // would take the fills with it, so they are re-acquired if that happens.
+            if (stageButtons.Any(button => button == null) && !AttachToButtons())
+                return;
+
+            for (int i = 0; i < stageFills.Length; i++)
             {
-                transform =
-                {
-                    parent = Main.canvasObj.transform
-                }
-            }.AddComponent<TextMeshPro>();
+                float fill;
 
-            label.font = activeFont;
-            label.fontStyle = activeFontStyle;
-            label.richText = true;
-            label.alignment = TextAlignmentOptions.Center;
-            label.text = text;
+                if (i < stageIndex)
+                    fill = 1f;
+                else if (i == stageIndex)
+                    fill = Mathf.Clamp01(stageProgress);
+                else
+                    fill = 0f;
 
-            // The menu's own button text recipe, copied rather than re-derived: auto sizing
-            // from a starting size of 1 with a minimum of 0, the same rect size, and the
-            // same 180/90/90 rotation so the label faces the same way the real one does.
-            label.fontSize = 1;
-            label.enableAutoSizing = true;
-            label.fontSizeMin = 0;
+                SetFill(stageFills[i], fill);
+            }
 
-            label.AddComponent<UIColorChanger>().colors = Main.textColors.Length > 1
-                ? Main.textColors[1]
-                : Main.textColors[0];
+            SetHeaderFill(OverallProgress());
+        }
 
-            RectTransform rect = label.rectTransform;
-            rect.sizeDelta = new Vector2(0.2f, 0.03f * (Main.ButtonDistance / 0.1f));
-            rect.localPosition = new Vector3(x + 0.064f, y, 0.111f);
-            rect.rotation = Quaternion.Euler(new Vector3(180f, 90f, 90f));
+        private static void SetFill(Transform fill, float progress)
+        {
+            if (fill == null)
+                return;
 
-            FollowMenuSettings(label);
+            // The cube scales from its centre, so nudging it by half of whatever it has
+            // grown keeps its left edge pinned where the button starts.
+            Transform button = fill.parent;
+            float full = button != null ? button.localScale.x : 0.09f;
+            float grown = full * progress;
+
+            fill.localScale = new Vector3(grown, 1.3f, 0.08f);
+            fill.localPosition = new Vector3(-full / 2f + grown / 2f, 0f, -FillDepth);
+        }
+
+        private static void SetHeaderFill(float progress)
+        {
+            if (headerFill == null || header == null)
+                return;
+
+            float full = header.localScale.x;
+            float grown = full * progress;
+
+            headerFill.localScale = new Vector3(grown, 1.3f, 0.08f);
+            headerFill.localPosition = new Vector3(-full / 2f + grown / 2f, 0f, 0.08f);
+
+            if (headerText != null)
+                headerText.text = $"Loading {Mathf.RoundToInt(progress * 100f)}%";
+        }
+
+        private static float OverallProgress() =>
+            (stageIndex + Mathf.Clamp01(stageProgress)) / StageNames.Length;
+
+        private static bool EscapePressed()
+        {
+            try
+            {
+                Keyboard keyboard = Keyboard.current;
+                return keyboard != null && keyboard.escapeKey.wasPressedThisFrame;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         /// <summary>
-        /// The labels shown, taken from the main category of the menu itself so the screen
-        /// always lists whatever the menu actually contains. Section labels and this
-        /// button are skipped.
+        /// Appends the Loading category. Done once and kept, because the menu tears its
+        /// category data down on unload anyway and rebuilding it every time is pointless.
         /// </summary>
-        private static string[] CollectEntries()
+        private static void AddLoadingCategory()
         {
-            List<string> collected = new List<string>();
-            HashSet<string> seen = new HashSet<string>();
+            if (categoryAdded && Buttons.GetCategory(CategoryName) >= 0)
+                return;
 
-            ButtonInfo[] category = MainCategory();
+            List<ButtonInfo> stages = StageNames
+                .Select(name => new ButtonInfo
+                {
+                    buttonText = name,
+                    isTogglable = false,
+                    method = () => { },
+                    toolTip = "Loading."
+                })
+                .ToList();
 
-            if (category == null)
-                return collected.ToArray();
-
-            foreach (ButtonInfo button in category)
+            stages.Add(new ButtonInfo
             {
-                if (button == null || button.label)
-                    continue;
+                buttonText = SkipButtonText,
+                overlapText = "Skip <color=green>[Esc]</color>",
+                isTogglable = false,
+                method = Hide,
+                toolTip = "Ends the loading screen early."
+            });
 
-                string label = NoRichtextTags(button.overlapText ?? button.buttonText).Trim();
+            List<ButtonInfo[]> categories = Buttons.buttons.ToList();
+            categories.Add(stages.ToArray());
+            Buttons.buttons = categories.ToArray();
 
-                if (string.IsNullOrEmpty(label))
-                    continue;
+            List<string> names = Buttons.categoryNames.ToList();
 
-                if (label.IndexOf("Loading Screen", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    label.IndexOf("Auto Loading Screen", StringComparison.OrdinalIgnoreCase) >= 0)
-                    continue;
+            if (!names.Contains(CategoryName))
+                names.Add(CategoryName);
 
-                if (!seen.Add(label))
-                        continue;
-
-                collected.Add(label);
-            }
-
-            return collected.ToArray();
+            Buttons.categoryNames = names.ToArray();
+            categoryAdded = true;
         }
 
-        private static ButtonInfo[] MainCategory()
+        private static void RestoreCategory()
         {
-            if (Buttons.buttons == null || Buttons.buttons.Length == 0)
-                return null;
+            if (previousCategory < 0)
+                return;
 
-            int index = MainCategoryIndex();
+            int target = previousCategory;
+            previousCategory = -1;
 
-            if (index < 0 || index >= Buttons.buttons.Length)
-                index = 0;
+            if (Main.menu == null)
+                return;
 
-            return Buttons.buttons[index];
+            Buttons.CurrentCategoryIndex = target;
+            Main.ReloadMenu();
         }
-
-        private static int MainCategoryIndex() =>
-            Buttons.GetCategory("Main");
     }
 }
