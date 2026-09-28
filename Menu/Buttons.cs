@@ -2686,7 +2686,7 @@ namespace iiMenu.Menu
         /// <param name="categoryName">Category Name</param>
         /// <returns>Category Index</returns>
         public static int GetCategory(string categoryName) =>
-            categoryNames.ToList().IndexOf(categoryName);
+            System.Array.IndexOf(categoryNames, categoryName);
 
         /// Adds a category to the button list.
         /// <remarks>
