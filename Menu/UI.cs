@@ -12,6 +12,7 @@ using iiMenu.Classes.Menu;
 using iiMenu.Extensions;
 using iiMenu.Managers;
 using Photon.Pun;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -20,6 +21,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Controls;
 using UnityEngine.UI;
 using static iiMenu.Menu.Main;
 using static iiMenu.Utilities.AssetUtilities;
@@ -206,16 +208,6 @@ namespace iiMenu.Menu
         /// <summary>The prefab canvas' own raycaster.</summary>
         public static GraphicRaycaster prefabRaycaster;
 
-        /// <summary>Drops the keyboard hook.</summary>
-        private static void RemoveTextInputHook()
-        {
-            if (hookedKeyboard == null)
-                return;
-
-            hookedKeyboard.onTextInput -= OnControlFieldChar;
-            hookedKeyboard = null;
-        }
-
         /// <summary>Focuses a field, since the XR input module never sends select.</summary>
         public static void FocusControlField(TMP_InputField field)
         {
@@ -224,7 +216,18 @@ namespace iiMenu.Menu
 
             focusedControlField = field;
             field.ActivateInputField();
-            field.caretPosition = field.text != null ? field.text.Length : 0;
+
+            caretIndex = field.text != null ? field.text.Length : 0;
+            ClearSelection();
+            SyncSelection(field);
+        }
+
+        /// <summary>Mirrors the local caret and selection into the field so TMP draws them.</summary>
+        private static void SyncSelection(TMP_InputField field)
+        {
+            field.caretPosition = caretIndex;
+            field.selectionStringAnchorPosition = HasSelection() ? selectionAnchor : caretIndex;
+            field.selectionStringFocusPosition = caretIndex;
         }
 
         private static void WatchControlField(TMP_InputField field, bool numeric)
@@ -238,22 +241,6 @@ namespace iiMenu.Menu
                 if (focusedControlField == field)
                     focusedControlField = null;
             });
-        }
-
-        private static Keyboard hookedKeyboard;
-
-        private static void HookTextInput()
-        {
-            Keyboard keyboard = Keyboard.current;
-
-            if (keyboard == null || hookedKeyboard == keyboard)
-                return;
-
-            if (hookedKeyboard != null)
-                hookedKeyboard.onTextInput -= OnControlFieldChar;
-
-            hookedKeyboard = keyboard;
-            hookedKeyboard.onTextInput += OnControlFieldChar;
         }
 
         private static readonly HashSet<TMP_InputField> numericControlFields = new HashSet<TMP_InputField>();
@@ -284,20 +271,12 @@ namespace iiMenu.Menu
                     value = "255";
             }
 
-            if (field.text == value)
-            {
-                caretIndex = Mathf.Clamp(caret, 0, value.Length);
-                field.caretPosition = caretIndex;
-                ClearSelection();
-                return;
-            }
-
             if (field.text != value)
                 field.text = value;
 
             caretIndex = Mathf.Clamp(caret, 0, value.Length);
-            field.caretPosition = caretIndex;
             ClearSelection();
+            SyncSelection(field);
         }
 
         private static void DeleteSelection(TMP_InputField field)
@@ -333,7 +312,7 @@ namespace iiMenu.Menu
             string value = field.text ?? "";
             selectionAnchor = 0;
             caretIndex = value.Length;
-            field.caretPosition = caretIndex;
+            SyncSelection(field);
         }
 
         private static void MoveCaret(TMP_InputField field, int direction, bool extend)
@@ -351,40 +330,89 @@ namespace iiMenu.Menu
             }
 
             caretIndex = Mathf.Clamp(caretIndex + direction, 0, value.Length);
-            field.caretPosition = caretIndex;
+            SyncSelection(field);
         }
 
-        /// <summary>Inserts a typed character, already shifted by the input system.</summary>
-        private static void OnControlFieldChar(char character)
+        /// <summary>Keys that produce a character, and how each is composed.</summary>
+        private static readonly (Key key, string plain, string shifted)[] textKeys =
         {
-            TMP_InputField field = focusedControlField;
+            (Key.A, "a", "A"), (Key.B, "b", "B"), (Key.C, "c", "C"), (Key.D, "d", "D"),
+            (Key.E, "e", "E"), (Key.F, "f", "F"), (Key.G, "g", "G"), (Key.H, "h", "H"),
+            (Key.I, "i", "I"), (Key.J, "j", "J"), (Key.K, "k", "K"), (Key.L, "l", "L"),
+            (Key.M, "m", "M"), (Key.N, "n", "N"), (Key.O, "o", "O"), (Key.P, "p", "P"),
+            (Key.Q, "q", "Q"), (Key.R, "r", "R"), (Key.S, "s", "S"), (Key.T, "t", "T"),
+            (Key.U, "u", "U"), (Key.V, "v", "V"), (Key.W, "w", "W"), (Key.X, "x", "X"),
+            (Key.Y, "y", "Y"), (Key.Z, "z", "Z"),
 
-            if (field == null || inTextInput || Instance == null || !Instance.isOpen)
-                return;
+            (Key.Digit1, "1", "!"), (Key.Digit2, "2", "\""), (Key.Digit3, "3", "#"), (Key.Digit4, "4", "$"),
+            (Key.Digit5, "5", "%"), (Key.Digit6, "6", "&"), (Key.Digit7, "7", "'"), (Key.Digit8, "8", "("),
+            (Key.Digit9, "9", ")"), (Key.Digit0, "0", ")"),
 
-            // A control shortcut such as Ctrl+C still arrives here as a character. Letting
-            // it through put a stray control code in the field, and because those codes have
-            // no glyph, every layout pass searched the fallback fonts for them, which is what
-            // made typing crawl and then stall. Control combinations are handled as keys.
-            if (char.IsControl(character))
-                return;
+            (Key.Space, " ", " "), (Key.Period, ".", ">"), (Key.Comma, ",", "<"),
+            (Key.Slash, "/", "?"), (Key.Semicolon, ";", ":"), (Key.Quote, "'", "\""),
+            (Key.Minus, "-", "_"), (Key.Equals, "=", "+"), (Key.LeftBracket, "[", "{"),
+            (Key.RightBracket, "]", "}"), (Key.Backslash, "\\", "|"), (Key.Backquote, "`", "~")
+        };
 
-            Keyboard keyboard = Keyboard.current;
+        private const float repeatDelay = 0.35f;
+        private const float repeatInterval = 0.05f;
 
-            if (keyboard != null &&
-                (keyboard.leftCtrlKey.isPressed || keyboard.rightCtrlKey.isPressed ||
-                 keyboard.leftAltKey.isPressed || keyboard.rightAltKey.isPressed))
-                return;
+        private static Key heldKey = Key.None;
+        private static string heldText;
+        private static float nextRepeatTime;
 
-            if (IsNumeric(field) && !char.IsDigit(character))
-                return;
-
-            string text = character.ToString();
+        private static void InsertText(TMP_InputField field, string text)
+        {
             string value = field.text ?? "";
             int start = HasSelection() ? SelectionStart() : Mathf.Clamp(caretIndex, 0, value.Length);
             int end = HasSelection() ? SelectionEnd() : start;
 
             ApplyValue(field, value.Substring(0, start) + text + value.Substring(end), start + text.Length);
+        }
+
+        /// <summary>
+        /// Handles typed characters, including auto repeat. This reads the keyboard directly
+        /// rather than using the input system's text callback, so that a held key can be
+        /// repeated on our own schedule.
+        /// </summary>
+        private static void UpdateTypedText(Keyboard keyboard, bool shift)
+        {
+            TMP_InputField field = focusedControlField;
+
+            foreach ((Key key, string plain, string shifted) in textKeys)
+            {
+                KeyControl control = keyboard[key];
+
+                if (control.wasPressedThisFrame)
+                {
+                    string text = shift ? shifted : plain;
+
+                    if (IsNumeric(field) && !char.IsDigit(text[0]))
+                        continue;
+
+                    InsertText(field, text);
+                    heldKey = key;
+                    heldText = text;
+                    nextRepeatTime = Time.time + repeatDelay;
+                }
+                else if (control.isPressed && key == heldKey && heldText != null && Time.time >= nextRepeatTime)
+                {
+                    if (IsNumeric(field) && !char.IsDigit(heldText[0]))
+                    {
+                        heldKey = Key.None;
+                        heldText = null;
+                        return;
+                    }
+
+                    InsertText(field, heldText);
+                    nextRepeatTime = Time.time + repeatInterval;
+                }
+                else if (!control.isPressed && key == heldKey)
+                {
+                    heldKey = Key.None;
+                    heldText = null;
+                }
+            }
         }
 
         /// <summary>Control shortcuts, deletion and caret movement for the focused field.</summary>
@@ -394,8 +422,6 @@ namespace iiMenu.Menu
 
             if (field == null || inTextInput || Instance == null || !Instance.isOpen)
                 return;
-
-            HookTextInput();
 
             Keyboard keyboard = Keyboard.current;
 
@@ -442,76 +468,94 @@ namespace iiMenu.Menu
                             clipboard = new string(clipboard.Where(char.IsDigit).ToArray());
 
                         if (clipboard.Length > 0)
-                        {
-                            string value = field.text ?? "";
-                            int start = HasSelection() ? SelectionStart() : Mathf.Clamp(caretIndex, 0, value.Length);
-                            int end = HasSelection() ? SelectionEnd() : start;
-
-                            ApplyValue(field, value.Substring(0, start) + clipboard + value.Substring(end), start + clipboard.Length);
-                        }
+                            InsertText(field, clipboard);
                     }
 
                     return;
                 }
 
-                // Leave the remaining control combinations to whatever else wants them.
+                // The rest of the control combinations are left to whatever else wants them.
                 return;
             }
 
-            if (keyboard.backspaceKey.wasPressedThisFrame)
-            {
-                if (HasSelection())
-                {
-                    DeleteSelection(field);
-                    return;
-                }
+            UpdateTypedText(keyboard, shift);
 
-                string value = field.text ?? "";
-                int caret = Mathf.Clamp(field.caretPosition, 0, value.Length);
-
-                if (caret > 0)
-                    ApplyValue(field, value.Remove(caret - 1, 1), caret - 1);
-
-                return;
-            }
-
-            if (keyboard.deleteKey.wasPressedThisFrame)
-            {
-                if (HasSelection())
-                {
-                    DeleteSelection(field);
-                    return;
-                }
-
-                string value = field.text ?? "";
-                int caret = Mathf.Clamp(field.caretPosition, 0, value.Length);
-
-                if (caret < value.Length)
-                    ApplyValue(field, value.Remove(caret, 1), caret);
-
-                return;
-            }
-
-            if (keyboard.leftArrowKey.wasPressedThisFrame)
-            {
-                MoveCaret(field, -1, shift);
-                return;
-            }
-
-            if (keyboard.rightArrowKey.wasPressedThisFrame)
-            {
-                MoveCaret(field, 1, shift);
-                return;
-            }
+            RepeatKey(keyboard.backspaceKey, () => Backspace(field));
+            RepeatKey(keyboard.deleteKey, () => DeleteForward(field));
+            RepeatKey(keyboard.leftArrowKey, () => MoveCaret(field, -1, shift));
+            RepeatKey(keyboard.rightArrowKey, () => MoveCaret(field, 1, shift));
 
             if (keyboard.homeKey.wasPressedThisFrame)
             {
-                field.MoveTextStart(shift);
+                MoveCaretTo(field, 0, shift);
                 return;
             }
 
             if (keyboard.endKey.wasPressedThisFrame)
-                field.MoveTextEnd(shift);
+                MoveCaretTo(field, (field.text ?? "").Length, shift);
+        }
+
+        /// <summary>Runs an editing action on press, then again while held.</summary>
+        private static void RepeatKey(KeyControl key, Action action)
+        {
+            if (key.wasPressedThisFrame)
+            {
+                action();
+                nextEditRepeat = Time.time + repeatDelay;
+            }
+            else if (key.isPressed && Time.time >= nextEditRepeat)
+            {
+                action();
+                nextEditRepeat = Time.time + repeatInterval;
+            }
+        }
+
+        private static float nextEditRepeat;
+
+        private static void Backspace(TMP_InputField field)
+        {
+            if (HasSelection())
+            {
+                DeleteSelection(field);
+                return;
+            }
+
+            string value = field.text ?? "";
+            int caret = Mathf.Clamp(caretIndex, 0, value.Length);
+
+            if (caret > 0)
+                ApplyValue(field, value.Remove(caret - 1, 1), caret - 1);
+        }
+
+        private static void DeleteForward(TMP_InputField field)
+        {
+            if (HasSelection())
+            {
+                DeleteSelection(field);
+                return;
+            }
+
+            string value = field.text ?? "";
+            int caret = Mathf.Clamp(caretIndex, 0, value.Length);
+
+            if (caret < value.Length)
+                ApplyValue(field, value.Remove(caret, 1), caret);
+        }
+
+        private static void MoveCaretTo(TMP_InputField field, int position, bool extend)
+        {
+            if (extend)
+            {
+                if (!HasSelection())
+                    selectionAnchor = Mathf.Clamp(caretIndex, 0, (field.text ?? "").Length);
+            }
+            else
+            {
+                ClearSelection();
+            }
+
+            caretIndex = Mathf.Clamp(position, 0, (field.text ?? "").Length);
+            SyncSelection(field);
         }
 
         private void LateUpdate()
