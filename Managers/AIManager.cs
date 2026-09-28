@@ -1,22 +1,9 @@
 /*
- * ii's Stupid Menu  Managers/AIManager.cs
- * A mod menu for Gorilla Tag with over 1000+ mods
- *
- * Copyright (C) 2026  Goldentrophy Software
- * https://github.com/iireborn/iis.Stupid.Menu
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * ii Reborn
+ * Portions Copyright (C) 2025–2026 Goldentrophy Software
+ * Licensed under GNU GPL v3.0-or-later — see LICENSE and NOTICE.
+ * This file is part of a derivative work; see NOTICE for attribution
+ * and modification history. Do not remove this notice.
  */
 using GorillaNetworking;
 using iiMenu.Classes.Menu;
@@ -42,8 +29,8 @@ namespace iiMenu.Managers
         MENU VERSION: {2}
         MOD COUNT: {0}
 
-        You are SYSTEM, the built-in voice assistant of a Gorilla Tag mod menu called ""ii's Stupid Menu"" by iiDk on GitHub. You are not iiDk, but you represent the menu.
-        GitHub: https://github.com/iiDk-the-actual
+        You are SYSTEM, the built-in voice assistant of a Gorilla Tag mod menu called ""ii Reborn"", a derivative of ii's Stupid Menu. This assistant module is baseline work by iiDk. You are not iiDk, but you represent the menu.
+        GitHub: https://github.com/iireborn/menu
         iiDk's Discord Server: {1}
         iiDk's Discord Username: @crimsoncauldron
 
@@ -70,7 +57,37 @@ namespace iiMenu.Managers
 
         public static bool customPrompt;
         public static bool generating;
+        public static bool requestInFlight;
+
+        private static bool cancelled;
+        private static UnityWebRequest activeRequest;
+
         public static string URLEncode(string input) => Uri.EscapeDataString(input);
+
+        /// <summary>
+        /// Stops whatever the assistant is currently waiting on. Safe to call from a speech callback.
+        /// </summary>
+        public static void CancelRequest()
+        {
+            cancelled = true;
+            generating = false;
+            requestInFlight = false;
+
+            UnityWebRequest request = activeRequest;
+            activeRequest = null;
+
+            if (request == null)
+                return;
+
+            try
+            {
+                request.Abort();
+            }
+            catch (Exception exception)
+            {
+                LogManager.LogError($"Voice assistant: could not cancel the request: {exception.Message}");
+            }
+        }
 
         private const string AiEndpoint = "https://text.pollinations.ai/";
 
@@ -134,7 +151,18 @@ namespace iiMenu.Managers
 
         public static string BuildPrompt(string question)
         {
-            string system = string.Format(SystemPrompt, Main.fullModAmount, Main.serverLink, PluginInfo.Version);
+            string system;
+
+            try
+            {
+                system = string.Format(SystemPrompt, Main.fullModAmount, Main.serverLink, PluginInfo.Version);
+            }
+            catch (FormatException)
+            {
+                // A custom system prompt with stray braces must never kill the request
+                LogManager.LogError("Voice assistant: the system prompt has invalid format braces, sending it unformatted.");
+                system = SystemPrompt;
+            }
 
             StringBuilder builder = new StringBuilder();
             builder.Append(system);
@@ -152,22 +180,44 @@ namespace iiMenu.Managers
             aiResponseOk = false;
             aiResponseError = null;
 
-            using UnityWebRequest request = UnityWebRequest.Get(BuildAiUrl(prompt, model));
-            request.downloadHandler = new DownloadHandlerBuffer();
-            request.timeout = 8;
+            string failure = null;
+            string body = null;
 
-            yield return request.SendWebRequest();
-
-            if (request.result != UnityWebRequest.Result.Success)
+            using (UnityWebRequest request = UnityWebRequest.Get(BuildAiUrl(prompt, model)))
             {
-                aiResponseError = request.error;
-                if (request.downloadHandler != null && !string.IsNullOrEmpty(request.downloadHandler.text))
-                    aiResponseError += " — " + request.downloadHandler.text.Trim();
+                request.downloadHandler = new DownloadHandlerBuffer();
+                request.timeout = 20;
 
+                activeRequest = request;
+
+                yield return request.SendWebRequest();
+
+                if (activeRequest == request)
+                    activeRequest = null;
+
+                if (request.result != UnityWebRequest.Result.Success)
+                {
+                    failure = request.error;
+
+                    try
+                    {
+                        if (request.downloadHandler != null && !string.IsNullOrEmpty(request.downloadHandler.text))
+                            failure += " — " + request.downloadHandler.text.Trim();
+                    }
+                    catch (Exception) { }
+                }
+                else
+                {
+                    body = request.downloadHandler.text;
+                }
+            }
+
+            if (failure != null)
+            {
+                aiResponseError = failure;
                 yield break;
             }
 
-            string body = request.downloadHandler.text;
             if (IsAiError(body, out string reason))
             {
                 aiResponseError = reason;
@@ -481,22 +531,35 @@ namespace iiMenu.Managers
 
         public static IEnumerator AskAI(string text)
         {
-            NotificationManager.SendNotification("<color=grey>[</color><color=cyan>SYSTEM</color><color=grey>]</color> AI Assistant is under construction.", 4000);
-            VoiceAssistant.Hide();
-            yield break;
-        }
+            if (string.IsNullOrWhiteSpace(text))
+                yield break;
 
-        public static IEnumerator AskAI_REAL(string text)
-        {
+            if (requestInFlight)
+            {
+                LogManager.Log($"Voice assistant: ignoring \"{text}\" because a reply is already being generated.");
+                yield break;
+            }
+
+            requestInFlight = true;
+            cancelled = false;
+            generating = true;
+
             LogManager.Log($"Voice assistant: question \"{text}\"");
 
             VoiceAssistant.SetState(VoiceAssistant.OrbState.Thinking);
 
-            string filePath = $"{PluginInfo.BaseDirectory}/iiMenu_SystemPrompt.txt";
-            if (!File.Exists(filePath))
-                File.WriteAllText(filePath, SystemPrompt);
-            else if (customPrompt)
-                SystemPrompt = File.ReadAllText(filePath);
+            try
+            {
+                string filePath = $"{PluginInfo.BaseDirectory}/iiMenu_SystemPrompt.txt";
+                if (!File.Exists(filePath))
+                    File.WriteAllText(filePath, SystemPrompt);
+                else if (customPrompt)
+                    SystemPrompt = File.ReadAllText(filePath);
+            }
+            catch (Exception exception)
+            {
+                LogManager.LogError($"Voice assistant: could not read the system prompt: {exception.Message}");
+            }
 
             while (Time.time < Main.timeMenuStarted + 5f)
                 yield return null;
@@ -521,12 +584,12 @@ namespace iiMenu.Managers
                     if (Main.dynamicSounds)
                         Settings.DictationPlay(LoadSoundFromURL($"{PluginInfo.ServerResourcePath}/Audio/Menu/confirm.ogg", "Audio/Menu/confirm.ogg"), Main.buttonClickVolume / 10f);
 
+                    requestInFlight = false;
+                    generating = false;
+
                     VoiceAssistant.Say(localReply);
                     VoiceAssistant.SetState(VoiceAssistant.OrbState.Speaking);
                     CoroutineManager.instance.StartCoroutine(VoiceAssistant.HideAfterSpeech(localReply));
-
-                    if (!Buttons.GetIndex("Chain Voice Commands").enabled)
-                        CoroutineManager.instance.StartCoroutine(Settings.DictationRestart());
 
                     yield break;
                 }
@@ -535,27 +598,46 @@ namespace iiMenu.Managers
             string prompt = BuildPrompt(text);
 
             VoiceAssistant.SetState(VoiceAssistant.OrbState.Thinking);
-            generating = true;
 
             string response = null;
-            foreach (string model in aiModels)
-            {
-                yield return CoroutineManager.instance.StartCoroutine(RequestAi(prompt, model));
+            const int attempts = 2;
 
-                if (aiResponseOk)
+            for (int attempt = 0; attempt < attempts && !cancelled; attempt++)
+            {
+                foreach (string model in aiModels)
                 {
-                    response = aiResponse;
-                    break;
+                    yield return CoroutineManager.instance.StartCoroutine(RequestAi(prompt, model));
+
+                    if (aiResponseOk)
+                    {
+                        response = aiResponse;
+                        break;
+                    }
+
+                    aiRequestError = aiResponseError;
+                    if (Settings.debugDictation)
+                        LogManager.LogError($"AI request failed on model \"{model ?? "default"}\": {aiResponseError}");
+
+                    if (cancelled)
+                        break;
+
+                    yield return new WaitForSeconds(0.5f);
                 }
 
-                aiRequestError = aiResponseError;
-                if (Settings.debugDictation)
-                    LogManager.LogError($"AI request failed on model \"{model ?? "default"}\": {aiResponseError}");
-
-                yield return new WaitForSeconds(0.35f);
+                if (!string.IsNullOrEmpty(response) || cancelled)
+                    break;
             }
 
             generating = false;
+            requestInFlight = false;
+
+            if (cancelled)
+            {
+                LogManager.Log("Voice assistant: the request was cancelled.");
+                VoiceAssistant.Hide();
+                Settings.ResumeListening();
+                yield break;
+            }
 
             if (string.IsNullOrEmpty(response))
             {
@@ -565,8 +647,7 @@ namespace iiMenu.Managers
                 if (Main.dynamicSounds)
                     Settings.DictationPlay(LoadSoundFromURL($"{PluginInfo.ServerResourcePath}/Audio/Menu/close.ogg", "Audio/Menu/close.ogg"), Main.buttonClickVolume / 10f);
 
-                if (!Buttons.GetIndex("Chain Voice Commands").enabled)
-                    CoroutineManager.instance.StartCoroutine(Settings.DictationRestart());
+                Settings.ResumeListening();
 
                 yield break;
             }
@@ -605,9 +686,6 @@ namespace iiMenu.Managers
 
             VoiceAssistant.SetState(VoiceAssistant.OrbState.Speaking);
             CoroutineManager.instance.StartCoroutine(VoiceAssistant.HideAfterSpeech(formatResponse ?? string.Empty));
-
-            if (!Buttons.GetIndex("Chain Voice Commands").enabled)
-                CoroutineManager.instance.StartCoroutine(Settings.DictationRestart());
         }
     }
 }

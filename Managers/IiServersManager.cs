@@ -1,3 +1,10 @@
+/*
+ * ii Reborn
+ * Portions Copyright (C) 2025–2026 Goldentrophy Software
+ * Licensed under GNU GPL v3.0-or-later — see LICENSE and NOTICE.
+ * This file is part of a derivative work; see NOTICE for attribution
+ * and modification history. Do not remove this notice.
+ */
 using iiMenu.Classes.Menu;
 using iiMenu.Menu;
 using ExitGames.Client.Photon;
@@ -665,7 +672,7 @@ namespace iiMenu.Managers
             try
             {
                 req = UnityWebRequest.Get(ApiUrl);
-                req.SetRequestHeader("User-Agent", "iis-Stupid-Menu");
+                req.SetRequestHeader("User-Agent", "ii-Reborn");
                 req.SetRequestHeader("Accept", "application/json");
                 req.timeout = 12;
                 op = req.SendWebRequest();

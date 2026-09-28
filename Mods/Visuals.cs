@@ -1,22 +1,9 @@
 ﻿/*
- * ii's Stupid Menu  Mods/Visuals.cs
- * A mod menu for Gorilla Tag with over 1000+ mods
- *
- * Copyright (C) 2026  Goldentrophy Software
- * https://github.com/iireborn/iis.Stupid.Menu
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * ii Reborn
+ * Portions Copyright (C) 2025–2026 Goldentrophy Software
+ * Licensed under GNU GPL v3.0-or-later — see LICENSE and NOTICE.
+ * This file is part of a derivative work; see NOTICE for attribution
+ * and modification history. Do not remove this notice.
  */
 
 using GameObjectScheduling;
@@ -177,7 +164,7 @@ namespace iiMenu.Mods
         public static void ConductDebug()
         {
             string text = "";
-            text += "<color=blue><b>ii's Stupid Menu </b></color>" + PluginInfo.Version + "\\n \\n";
+            text += "<color=blue><b>ii Reborn </b></color>" + PluginInfo.Version + "\\n \\n";
             
             string red = "<color=red>" + MathF.Floor(PlayerPrefs.GetFloat("redValue") * 255f) + "</color>";
             string green = ", <color=green>" + MathF.Floor(PlayerPrefs.GetFloat("greenValue") * 255f) + "</color>";
@@ -601,7 +588,7 @@ namespace iiMenu.Mods
 
             Text watchTextComponent = regwatchText.GetComponent<Text>();
 
-            if (infoWatchMenuName || defaultWatch) watchTextComponent.text = "ii's Stupid Menu\n<color=grey>";
+            if (infoWatchMenuName || defaultWatch) watchTextComponent.text = "ii Reborn\n<color=grey>";
             if (doCustomName && (infoWatchMenuName || defaultWatch))
                 watchTextComponent.text = NoRichtextTags(customMenuName) + "\n<color=grey>";
             if (!infoWatchMenuName && !defaultWatch)
@@ -3231,12 +3218,9 @@ namespace iiMenu.Mods
 
                 TextMeshPro tmp = container.transform.Find("text").GetComponent<TextMeshPro>();
 
-                NetPlayer player = GetPlayerFromVRRig(vrrig);
-                if (player == null) continue;
-
                 if (NameTagOptimize())
                 {
-                    tmp.SafeSetText(CleanPlayerName(player.NickName));
+                    tmp.SafeSetText(CleanPlayerName(GetPlayerFromVRRig(vrrig).NickName));
                     tmp.SafeSetFontStyle(FontStyles.Normal);
                     tmp.SafeSetFont(Minecraft);
                     tmp.margin = Vector4.zero;

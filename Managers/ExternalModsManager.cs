@@ -1,3 +1,10 @@
+/*
+ * ii Reborn
+ * Portions Copyright (C) 2025–2026 Goldentrophy Software
+ * Licensed under GNU GPL v3.0-or-later — see LICENSE and NOTICE.
+ * This file is part of a derivative work; see NOTICE for attribution
+ * and modification history. Do not remove this notice.
+ */
 using iiMenu.Classes.Menu;
 using iiMenu.Menu;
 using iiMenu.Mods;
@@ -101,7 +108,7 @@ namespace iiMenu.Managers
 
             using (UnityWebRequest req = UnityWebRequest.Get(apiUrl))
             {
-                req.SetRequestHeader("User-Agent", "iis-Stupid-Menu");
+                req.SetRequestHeader("User-Agent", "ii-Reborn");
                 req.SetRequestHeader("Accept", "application/vnd.github+json");
                 req.timeout = 15;
                 yield return req.SendWebRequest();
@@ -180,7 +187,7 @@ namespace iiMenu.Managers
             byte[] data = null;
             using (UnityWebRequest dl = UnityWebRequest.Get(dllUrl))
             {
-                dl.SetRequestHeader("User-Agent", "iis-Stupid-Menu");
+                dl.SetRequestHeader("User-Agent", "ii-Reborn");
                 dl.downloadHandler = new DownloadHandlerBuffer();
                 dl.timeout = 30;
                 yield return dl.SendWebRequest();

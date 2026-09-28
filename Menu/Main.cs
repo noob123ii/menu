@@ -1,22 +1,9 @@
 /*
- * ii's Stupid Menu  Menu/Main.cs
- * A mod menu for Gorilla Tag with over 1000+ mods
- *
- * Copyright (C) 2026  Goldentrophy Software
- * https://github.com/iireborn/iis.Stupid.Menu
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * ii Reborn
+ * Portions Copyright (C) 2025–2026 Goldentrophy Software
+ * Licensed under GNU GPL v3.0-or-later — see LICENSE and NOTICE.
+ * This file is part of a derivative work; see NOTICE for attribution
+ * and modification history. Do not remove this notice.
  */
 
 using BepInEx;
@@ -69,16 +56,13 @@ using Object = UnityEngine.Object;
 using Random = UnityEngine.Random;
 
 /*
- * ii's Stupid Menu, written by @goldentrophy
+ * ii Reborn
  * Any comments are developer comments I wrote
  * Most comments are used to find certain parts of code faster with Ctrl + F
  * Feel free to read them if you want
  *
- * ii's Stupid Menu falls under the GPL-3.0 license
- * https://github.com/iireborn/iis.Stupid.Menu
- *
- * If you want to support my, check out my Patreon: https://patreon.com/iiDk
- * Any support is appreciated, and it helps me make more free content for you all
+ * ii Reborn falls under the GPL-3.0 license
+ * https://github.com/iireborn/menu
  */
 
 namespace iiMenu.Menu
@@ -100,8 +84,6 @@ namespace iiMenu.Menu
 
             InitializeFonts();
             activeFont = AgencyFB;
-
-            acceptedDonations = File.Exists($"{PluginInfo.BaseDirectory}/iiMenu_HideDonationButton.txt");
 
             NetworkSystem.Instance.OnJoinedRoomEvent += OnJoinRoom;
             NetworkSystem.Instance.OnReturnedToSinglePlayer += OnLeaveRoom;
@@ -570,7 +552,7 @@ namespace iiMenu.Menu
 
                 if (animatedTitle && title != null)
                 {
-                    string targetString = doCustomName ? NoRichtextTags(customMenuName) : "ii's Stupid Menu";
+                    string targetString = doCustomName ? NoRichtextTags(customMenuName) : "ii Reborn";
                     int length = (int)Mathf.PingPong(Time.time / 0.25f, targetString.Length + 1);
                     title.text = length > 0 ? targetString[..length] : "";
                 }
@@ -2227,53 +2209,6 @@ namespace iiMenu.Menu
             FollowMenuSettings(debugImage);
         }
 
-        private static void AddDonateButton()
-        {            GameObject buttonObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            if (!UnityInput.Current.GetKey(KeyCode.Q) && !isKeyboardPc)
-                buttonObject.layer = 2;
-
-            buttonObject.GetComponent<BoxCollider>().isTrigger = true;
-            buttonObject.transform.parent = menu.transform;
-            buttonObject.transform.rotation = Quaternion.identity;
-
-            buttonObject.transform.localScale = new Vector3(0.09f, 0.102f, 0.08f);
-            buttonObject.transform.localPosition = thinMenu ? new Vector3(0.56f, 0.450f, -0.58f) : new Vector3(0.56f, 0.7f, -0.58f);
-
-            buttonObject.AddComponent<ButtonCollider>().relatedText = "Donate Button";
-
-            ColorChanger colorChanger = buttonObject.AddComponent<ColorChanger>();
-            colorChanger.colors = buttonColors[swapButtonColors ? 1 : 0];
-
-            FollowMenuSettings(buttonObject, !swapButtonColors);
-
-            Image donateImage = new GameObject
-            {
-                transform =
-                {
-                    parent = canvasObj.transform
-                }
-            }.AddComponent<Image>();
-            if (donateIcon == null)
-                donateIcon = LoadTextureFromResource($"{PluginInfo.ClientResourcePath}.donate.png");
-
-            if (donateMat == null)
-                donateMat = new Material(donateImage.material);
-
-            donateImage.material = donateMat;
-            donateImage.material.SetTexture("_MainTex", donateIcon);
-            donateImage.AddComponent<UIColorChanger>().colors = textColors[1];
-
-            RectTransform imageTransform = donateImage.GetComponent<RectTransform>();
-            imageTransform.localPosition = Vector3.zero;
-            imageTransform.sizeDelta = new Vector2(.03f, .03f);
-
-            imageTransform.localPosition = thinMenu ? new Vector3(.064f, 0.35f / 2.6f, -0.58f / 2.6f) : new Vector3(.064f, 0.54444444444f / 2.6f, -0.58f / 2.6f);
-
-            imageTransform.rotation = Quaternion.Euler(new Vector3(180f, 90f, 90f));
-
-            FollowMenuSettings(donateImage);
-        }
-
         private static void AddUpdateButton()
         {            GameObject buttonObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
             if (!UnityInput.Current.GetKey(KeyCode.Q) && !isKeyboardPc)
@@ -2666,7 +2601,7 @@ namespace iiMenu.Menu
                     }
                 }.AddComponent<TextMeshPro>();
                 title.font = activeFont;
-                title.text = translate ? "ii's Stupid Menu" : "ii's <b>Stupid</b> Menu";
+                title.text = translate ? "ii Reborn" : "ii <b>Reborn</b>";
 
                 if (doCustomName)
                     title.text = customMenuName;
@@ -2708,7 +2643,7 @@ namespace iiMenu.Menu
 
                 if (animatedTitle)
                 {
-                    string targetString = doCustomName ? NoRichtextTags(customMenuName) : "ii's Stupid Menu";
+                    string targetString = doCustomName ? NoRichtextTags(customMenuName) : "ii Reborn";
                     int length = (int)Mathf.PingPong(Time.time / 0.25f, targetString.Length);
                     title.text = length > 0 ? targetString[..length] : "";
                 }
@@ -2870,13 +2805,11 @@ namespace iiMenu.Menu
                 AddDebugButton();
             else
             {
-                if (!acceptedDonations)
-                    AddDonateButton();
-                else if (ServerData.OutdatedVersion)
+                if (ServerData.OutdatedVersion)
                     AddUpdateButton();
             }
 
-            if (CurrentPrompt == null && !pageScrolling && LastPage > 0)
+            if (CurrentPrompt == null && !pageScrolling)
                 AddPageButtons();
 
             if (inTextInput)
@@ -3851,8 +3784,19 @@ namespace iiMenu.Menu
 
         private static void CreatePageButtonPair(string prevButtonName, string nextButtonName, Vector3 buttonScale, Vector3 prevButtonPos, Vector3 nextButtonPos, Vector3 prevTextPos, Vector3 nextTextPos, ExtGradient color, Vector2? textSize = null)
         {
-            AdvancedAddButton(prevButtonName, buttonScale, prevButtonPos, prevTextPos, color, textSize, 0);
-            AdvancedAddButton(nextButtonName, buttonScale, nextButtonPos, nextTextPos, color, textSize, 1);
+            bool canTurnPage = LastPage > 0;
+
+            AdvancedAddButton(prevButtonName, buttonScale, prevButtonPos, prevTextPos, color, textSize, 0, canTurnPage);
+            AdvancedAddButton(nextButtonName, buttonScale, nextButtonPos, nextTextPos, color, textSize, 1, canTurnPage);
+        }
+
+        private static ExtGradient DimGradient(ExtGradient source)
+        {
+            GradientColorKey[] keys = new GradientColorKey[source.colors.Length];
+            for (int i = 0; i < keys.Length; i++)
+                keys[i] = new GradientColorKey(DarkenColor(source.colors[i].color, 0.45f), source.colors[i].time);
+
+            return new ExtGradient { colors = keys };
         }
 
         public static string ExtractPromptImage(string input)
@@ -3864,7 +3808,7 @@ namespace iiMenu.Menu
             return match.Success ? match.Groups["url"].Value : null;
         }
 
-        private static GameObject AdvancedAddButton(string buttonName, Vector3 scale, Vector3 position, Vector3 textPosition, ExtGradient color, Vector2? textSize, int arrowIndex)
+        private static GameObject AdvancedAddButton(string buttonName, Vector3 scale, Vector3 position, Vector3 textPosition, ExtGradient color, Vector2? textSize, int arrowIndex, bool interactable = true)
         {
             GameObject button = GameObject.CreatePrimitive(PrimitiveType.Cube);
 
@@ -3877,12 +3821,14 @@ namespace iiMenu.Menu
             button.transform.localScale = scale;
             button.transform.localPosition = position;
 
-            button.AddComponent<ButtonCollider>().relatedText = buttonName;
+            ButtonCollider buttonCollider = button.AddComponent<ButtonCollider>();
+            buttonCollider.relatedText = buttonName;
+            buttonCollider.interactable = interactable;
 
             if (lastClickedName != buttonName)
             {
                 ColorChanger colorChanger = button.AddComponent<ColorChanger>();
-                colorChanger.colors = color;
+                colorChanger.colors = interactable ? color : DimGradient(color);
             }
             else
                 CoroutineManager.instance.StartCoroutine(ButtonClick(-99, button.GetComponent<Renderer>()));
@@ -3896,7 +3842,7 @@ namespace iiMenu.Menu
             text.fontSizeMin = 0;
             text.spriteAsset = ButtonSpriteSheet;
 
-            text.AddComponent<UIColorChanger>().colors = textColors[1];
+            text.AddComponent<UIColorChanger>().colors = interactable ? textColors[1] : DimGradient(textColors[1]);
 
             RectTransform textRect = text.GetComponent<RectTransform>();
             textRect.sizeDelta = textSize ?? new Vector2(0.2f, 0.03f);
@@ -6653,6 +6599,11 @@ namespace iiMenu.Menu
 
         public static void UnloadMenu()
         {
+            // Release the microphone and dispose the speech recognizers before the engine tears down,
+            // leaving them alive through shutdown is what crashes the game on exit
+            try { Settings.DictationOff(); }
+            catch (Exception exception) { LogManager.LogError($"Failed to stop the voice assistant: {exception.Message}"); }
+
             Settings.Panic();
             CustomBoardManager.CustomBoardsEnabled = false;
             CustomBoardManager.CustomBoardFonts = false;
@@ -6689,13 +6640,13 @@ namespace iiMenu.Menu
                 VRKeyboard = null;
             }
 
-            if (CustomBoardManager.instance.motdTitle != null)
+            if (CustomBoardManager.instance != null && CustomBoardManager.instance.motdTitle != null)
             {
                 Destroy(CustomBoardManager.instance.motdTitle);
                 CustomBoardManager.instance.motdTitle = null;
             }
 
-            if (CustomBoardManager.instance.motdText != null)
+            if (CustomBoardManager.instance != null && CustomBoardManager.instance.motdText != null)
             {
                 Destroy(CustomBoardManager.instance.motdText);
                 CustomBoardManager.instance.motdText = null;
@@ -7255,8 +7206,7 @@ jgs \_   _/ |Oo\
         public static bool fpsCountTimed;
         public static bool fpsCountAverage;
         public static bool ftCount;
-        public static bool acceptedDonations;
-        public static float lastDeltaTime = 1f;
+                public static float lastDeltaTime = 1f;
         public static TextMeshPro keyboardInputObject;
         public static TextMeshPro title;
         public static VRRig GhostRig;
@@ -7270,8 +7220,7 @@ jgs \_   _/ |Oo\
         public static Material watermarkMat;
         public static Material returnMat;
         public static Material debugMat;
-        public static Material donateMat;
-
+        
         public static GameObject lKeyReference;
         public static SphereCollider lKeyCollider;
 
@@ -7303,8 +7252,7 @@ jgs \_   _/ |Oo\
         public static Texture2D searchIcon;
         public static Texture2D returnIcon;
         public static Texture2D debugIcon;
-        public static Texture2D donateIcon;
-        public static Texture2D updateIcon;
+                public static Texture2D updateIcon;
         public static Texture2D fixTexture;
         public static Texture2D customMenuBackgroundImage;
         public static Texture2D customWatermark;

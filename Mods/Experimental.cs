@@ -1,22 +1,9 @@
 /*
- * ii's Stupid Menu  Mods/Experimental.cs
- * A mod menu for Gorilla Tag with over 1000+ mods
- *
- * Copyright (C) 2026  Goldentrophy Software
- * https://github.com/iireborn/iis.Stupid.Menu
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * ii Reborn
+ * Portions Copyright (C) 2025–2026 Goldentrophy Software
+ * Licensed under GNU GPL v3.0-or-later — see LICENSE and NOTICE.
+ * This file is part of a derivative work; see NOTICE for attribution
+ * and modification history. Do not remove this notice.
  */
 
 using ExitGames.Client.Photon;
@@ -122,7 +109,7 @@ namespace iiMenu.Mods
                 i++;
             }
             text += "\n====================================\n";
-            text += "Text file generated with ii's Stupid Menu";
+            text += "Text file generated with ii Reborn";
             string fileName = $"{PluginInfo.BaseDirectory}/SoundData.txt";
 
             File.WriteAllText(fileName, text);
@@ -144,7 +131,7 @@ namespace iiMenu.Mods
                 catch { LogManager.Log("Failed to log hat"); }
             }
             text += "\n====================================\n";
-            text += "Text file generated with ii's Stupid Menu";
+            text += "Text file generated with ii Reborn";
             string fileName = $"{PluginInfo.BaseDirectory}/CosmeticData.txt";
 
             File.WriteAllText(fileName, text);
@@ -187,7 +174,7 @@ namespace iiMenu.Mods
                 i++;
             }
             text += "\n====================================\n";
-            text += "Text file generated with ii's Stupid Menu";
+            text += "Text file generated with ii Reborn";
             string fileName = $"{PluginInfo.BaseDirectory}/RPCData.txt";
 
             File.WriteAllText(fileName, text);
@@ -196,20 +183,6 @@ namespace iiMenu.Mods
             Process.Start(filePath);
         }
 
-        public static void CopySessionTicket()
-        {
-            string sessionticket = "error";
-
-            sessionticket = GameObject.Find("PlayFabAuthenticator").GetComponent<PlayFabAuthenticator>()._sessionTicket.ToString();
-
-            if (sessionticket != null && sessionticket != "error")
-            {
-                GUIUtility.systemCopyBuffer = sessionticket;
-                NotificationManager.SendNotification("<color=grey>[</color><color=green>SUCCESS</color><color=grey>]</color> Copied session ticket.", 5000);
-            }
-            else
-                NotificationManager.SendNotification("<color=grey>[</color><color=red>ERROR</color><color=grey>]</color> Error copying session ticket.", 5000);
-        }
         public static void BlankPage()
         {
             Buttons.buttons[Buttons.GetCategory("Temporary Category")] = Array.Empty<ButtonInfo>();

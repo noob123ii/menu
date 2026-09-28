@@ -1,22 +1,9 @@
 /*
- * ii's Stupid Menu  Mods/Important.cs
- * A mod menu for Gorilla Tag with over 1000+ mods
- *
- * Copyright (C) 2026  Goldentrophy Software
- * https://github.com/iireborn/iis.Stupid.Menu
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * ii Reborn
+ * Portions Copyright (C) 2025–2026 Goldentrophy Software
+ * Licensed under GNU GPL v3.0-or-later — see LICENSE and NOTICE.
+ * This file is part of a derivative work; see NOTICE for attribution
+ * and modification history. Do not remove this notice.
  */
 
 using BepInEx;
@@ -493,7 +480,7 @@ namespace iiMenu.Mods
                 .Aggregate("", (current, line) => current + (Environment.NewLine + "echo      " + line));
 
             string restartScript = @"@echo off
-title ii's Stupid Menu
+title ii Reborn
 color 0E
 
 cls
@@ -596,7 +583,7 @@ exit";
                     if (!string.IsNullOrEmpty(PluginInfo.DiscordLargeImageKey))
                     {
                         assets.LargeImageKey = PluginInfo.DiscordLargeImageKey;
-                        assets.LargeImageText = "ii's Stupid Menu";
+                        assets.LargeImageText = "ii Reborn";
                     }
 
                     if (!string.IsNullOrEmpty(smallImageKey))
@@ -627,7 +614,7 @@ exit";
                             new Button
                             {
                                 Label = "Download",
-                                Url = "https://github.com/iireborn/iis.Stupid.Menu"
+                                Url = "https://github.com/iireborn/menu"
                             }
                         }
                     });

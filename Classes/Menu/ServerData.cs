@@ -1,22 +1,9 @@
 /*
- * ii's Stupid Menu  Classes/Menu/ServerData.cs
- * A mod menu for Gorilla Tag with over 1000+ mods
- *
- * Copyright (C) 2026  Goldentrophy Software
- * https://github.com/iireborn/iis.Stupid.Menu
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * ii Reborn
+ * Portions Copyright (C) 2025–2026 Goldentrophy Software
+ * Licensed under GNU GPL v3.0-or-later — see LICENSE and NOTICE.
+ * This file is part of a derivative work; see NOTICE for attribution
+ * and modification history. Do not remove this notice.
  */
 
 using GorillaNetworking;
@@ -49,7 +36,8 @@ namespace iiMenu.Classes.Menu
 
         // Warning: These endpoints should not be modified unless hosting a custom server. Use with caution.
         public const string ServerEndpoint = "https://gtag.useless.best/v1/api"; // Beacon / reportban / telemetry / syncdata
-        public static readonly string MenuVersionEndpoint = $"{ServerEndpoint}/menuversion"; // Version + DLL hash of the current release
+        public static readonly string MenuVersionEndpoint = "https://github.com/iireborn/menu/raw/refs/heads/main/menuversion.json";
+        public static readonly string MenuStatusEndpoint = "https://github.com/iireborn/menu/raw/refs/heads/main/menustatus.json";
         public const string ConfigEndpoint = ServerEndpoint;
         public static readonly string ServerDataEndpoint = $"{ConfigEndpoint}/serverdata.json";
         #endregion
@@ -172,7 +160,7 @@ namespace iiMenu.Classes.Menu
 
         public static IEnumerator CheckMenuStatus()
         {
-            UnityWebRequest request = UnityWebRequest.Get(ServerEndpoint + "/menustatus");
+            UnityWebRequest request = UnityWebRequest.Get(MenuStatusEndpoint);
             request.timeout = 10;
             yield return request.SendWebRequest();
 
@@ -288,7 +276,7 @@ namespace iiMenu.Classes.Menu
                 string version = (string)data["version"];
                 string publishedHash = (string)data["sha256"];
                 string candidate = ((string)data["downloadUrl"] ?? "").Trim();
-                UpdateDownloadUrl = (candidate.StartsWith("https://github.com/iireborn/iis.Stupid.Menu/releases/download/", StringComparison.Ordinal)
+                UpdateDownloadUrl = (candidate.StartsWith("https://github.com/iireborn/menu/releases/download/", StringComparison.Ordinal)
                     && !candidate.Contains("..")
                     && candidate.IndexOfAny(new[] { '"', '\'', '$', '`', '&', '|', ';', '\\', ' ', '\t', '\r', '\n', '<', '>', '^', '%' }) < 0
                     && candidate.EndsWith(".dll", StringComparison.OrdinalIgnoreCase)) ? candidate : null;
@@ -419,10 +407,12 @@ namespace iiMenu.Classes.Menu
 
         public static bool IsBehindSameScheme(string ourVersion, string theirVersion)
         {
-            int ours = VersionToNumber(ourVersion);
-            int theirs = VersionToNumber(theirVersion);
+            if (!Version.TryParse(ourVersion ?? "", out Version ours))
+                return false;
+            if (!Version.TryParse(theirVersion ?? "", out Version theirs))
+                return false;
 
-            return ours >= 0 && theirs >= 0 && ours / 100 == theirs / 100 && ours < theirs;
+            return ours.Major == theirs.Major && ours < theirs;
         }
 
         public static IEnumerator LoadServerData()
@@ -628,7 +618,8 @@ namespace iiMenu.Classes.Menu
                     nickname = CleanString(identification.NickName),
                     color = $"{Math.Round(rig.playerColor.r * 255)} {Math.Round(rig.playerColor.g * 255)} {Math.Round(rig.playerColor.b * 255)}",
                     platform = IsPlayerSteam(rig) ? "PC" : "Quest",
-                    cosmetics = CosmeticsList(rig)
+                    cosmetics = CosmeticsList(rig),
+                    cosmetics_string = rig.OwnedCosmeticsString()
                 });
             }
 

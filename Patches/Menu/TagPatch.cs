@@ -1,22 +1,9 @@
 ﻿/*
- * ii's Stupid Menu  Patches/Menu/TagPatch.cs
- * A mod menu for Gorilla Tag with over 1000+ mods
- *
- * Copyright (C) 2026  Goldentrophy Software
- * https://github.com/iireborn/iis.Stupid.Menu
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * ii Reborn
+ * Portions Copyright (C) 2025–2026 Goldentrophy Software
+ * Licensed under GNU GPL v3.0-or-later — see LICENSE and NOTICE.
+ * This file is part of a derivative work; see NOTICE for attribution
+ * and modification history. Do not remove this notice.
  */
 
 using GorillaGameModes;
@@ -41,8 +28,9 @@ namespace iiMenu.Patches.Menu
         public static float tagDelay;
         public static int tagCount;
 
+        // Internal inconsistency fixed in commit c9b3048f36b61ca9c60ebba720d33c4194da4fbd. Remote ServerResourcePath only serves .ogg, never .wav!
         private static void PlaySound(string name) =>
-            LoadSoundFromURL($"{PluginInfo.ServerResourcePath}/Audio/Mods/Fun/TagSounds/{name}.wav", $"{name}.wav").Play(Main.buttonClickVolume / 10f);
+            LoadSoundFromURL($"{PluginInfo.ServerResourcePath}/Audio/Mods/Fun/TagSounds/{name}.ogg", $"Audio/Mods/Fun/TagSounds/{name}.ogg").Play(Main.buttonClickVolume / 10f);
 
         public static void Postfix(NetPlayer player)
         {

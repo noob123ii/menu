@@ -1,22 +1,9 @@
 /*
- * ii's Stupid Menu  Managers/VoiceAssistantManager.cs
- * A mod menu for Gorilla Tag with over 1000+ mods
- *
- * Copyright (C) 2026  Goldentrophy Software
- * https://github.com/iireborn/iis.Stupid.Menu
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * ii Reborn
+ * Portions Copyright (C) 2025–2026 Goldentrophy Software
+ * Licensed under GNU GPL v3.0-or-later — see LICENSE and NOTICE.
+ * This file is part of a derivative work; see NOTICE for attribution
+ * and modification history. Do not remove this notice.
  */
 
 using iiMenu.Classes.Menu;
@@ -276,21 +263,26 @@ namespace iiMenu.Managers
 
         private static IEnumerator ListeningWatchdog()
         {
-            float patience = 7f;
+            // Longer than the dictation timeout, so this only fires when the assistant is genuinely stuck listening
+            const float patience = 12f;
             unheardFor = 0f;
 
-            while (true)
+            while (orbState != OrbState.Hidden)
             {
                 yield return null;
 
                 if (orbState != OrbState.Listening)
-                    yield break;
+                {
+                    unheardFor = 0f;
+                    continue;
+                }
 
                 unheardFor += Time.unscaledDeltaTime;
 
                 if (unheardFor < patience)
                     continue;
 
+                LogManager.Log("Voice assistant: nobody spoke, going back to the wake word listener.");
                 Hide();
                 Say("I did not catch that. Say the wake word and ask me again.", voiceEnabled);
                 Settings.StopDictation();
@@ -635,11 +627,15 @@ namespace iiMenu.Managers
 
         public static IEnumerator HideAfterSpeech(string text)
         {
-            float wait = Mathf.Clamp(AIManager.Duration(text ?? string.Empty) / 1000f, 1.5f, 12f) + 0.5f;
+            float wait = Mathf.Clamp(AIManager.Duration(text ?? string.Empty) / 1000f, 1.5f, 12f) + 1f;
+
+            // Wait the narration out before the microphone opens again, so the assistant can not hear itself
             yield return new WaitForSeconds(wait);
 
-            if (orbState == OrbState.Speaking)
+            if (orbState == OrbState.Speaking || orbState == OrbState.Thinking)
                 Hide();
+
+            Settings.ResumeListening();
         }
 
         public static void FlashListening(float seconds = 2.5f)
@@ -697,26 +693,20 @@ namespace iiMenu.Managers
 
         public static void ManualWake()
         {
-            NotificationManager.SendNotification("<color=grey>[</color><color=cyan>SYSTEM</color><color=grey>]</color> AI Assistant is under construction.", 4000);
-            return;
-        }
-
-        public static void ManualWake_REAL()
-        {
             if (Buttons.GetIndex("AI Assistant")?.enabled != true)
             {
                 Say("Turn on AI Assistant in Menu Settings first, then wake me.", false);
                 return;
             }
 
-            if (Settings.drec != null)
+            if (Settings.drec != null || Settings.dictationActive)
             {
                 Say("Already listening.", false);
                 return;
             }
 
-            Greet();
-            CoroutineManager.instance.StartCoroutine(Settings.DictationRecognizer());
+            Greet(false);
+            Settings.StartListening();
         }
     }
 }
