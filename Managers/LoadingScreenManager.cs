@@ -137,6 +137,22 @@ namespace iiMenu.Managers
         /// <summary>Opens the loading screen. Safe to call while one is already up.</summary>
         public static void Show()
         {
+            // BepInEx reported "Unable to start Unity log writer" on this install, which
+            // means Unity level exceptions are never written to the log at all. Anything
+            // thrown in here would fail completely silently, so it is caught and logged
+            // with its stack trace instead.
+            try
+            {
+                ShowInternal();
+            }
+            catch (Exception exception)
+            {
+                LogManager.LogError($"Loading screen: threw while showing. {exception}");
+            }
+        }
+
+        private static void ShowInternal()
+        {
             Hide();
 
             if (Main.menu == null)
@@ -173,6 +189,8 @@ namespace iiMenu.Managers
 
             runner = new GameObject("iiMenu_LoadingScreenRunner");
             runner.AddComponent<LoadingScreenTick>();
+
+            LogManager.Log($"Loading screen: showing {StageNames.Length} stages.");
 
             Render();
         }
@@ -226,6 +244,19 @@ namespace iiMenu.Managers
             if (!Active)
                 return;
 
+            try
+            {
+                TickInternal();
+            }
+            catch (Exception exception)
+            {
+                LogManager.LogError($"Loading screen: threw while ticking. {exception}");
+                Hide();
+            }
+        }
+
+        private static void TickInternal()
+        {
             // Escape skips, read off Unity's InputSystem because the game's own UnityInput
             // wrapper is VR backed and reports nothing when no VR runtime is present.
             if (EscapePressed())
