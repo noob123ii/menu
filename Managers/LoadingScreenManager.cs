@@ -53,13 +53,13 @@ namespace iiMenu.Managers
         public static bool PlayOnMenuOpen = true;
 
         /// <summary>How long a single entry takes to fill, in seconds.</summary>
-        public static float EntryDuration = 0.28f;
+        public static float EntryDuration = 0.08f;
 
         /// <summary>How long the completed screen lingers before it tears itself down.</summary>
-        public static float LingerDuration = 1.2f;
+        public static float LingerDuration = 0.6f;
 
         /// <summary>Entries per row.</summary>
-        public static int Columns = 4;
+        public static int Columns = 3;
 
         /// <summary>Metres in front of the camera the screen is placed.</summary>
         public static float ViewDistance = 0.75f;
@@ -67,10 +67,11 @@ namespace iiMenu.Managers
         /// <summary>Fraction of the camera's vertical field the grid is allowed to fill.</summary>
         public static float ViewFill = 0.8f;
 
-        private const float CellWidth = 0.17f;
+        private const float CellWidth = 0.2f;
         private const float CellHeight = 0.055f;
         private const float ButtonThickness = 0.008f;
         private const float FillInset = 0.9f;
+        private const float ButtonFill = 0.8f;
         private const float DynamicPixelsPerUnit = 2500f;
 
         private sealed class Screen
@@ -238,7 +239,7 @@ namespace iiMenu.Managers
                 return;
 
             float width = CellWidth * FillInset;
-            float height = CellHeight * 0.62f * FillInset;
+            float height = CellHeight * ButtonFill * FillInset;
             float grown = width * progress;
 
             // The quad's pivot sits in the middle, so shifting it right by half of whatever
@@ -316,10 +317,15 @@ namespace iiMenu.Managers
             rootTransform.localPosition = new Vector3(0f, 0f, ViewDistance);
             rootTransform.localRotation = Quaternion.identity;
 
-            // Fit the whole grid inside the camera's view, then let one uniform scale
-            // carry it. Children sit at z = 0 so the distance is unaffected.
+            // Fit the grid inside the camera's view on BOTH axes, otherwise a wide grid
+            // spills off the sides. One uniform scale carries it; children sit at z = 0 so
+            // the distance is unaffected.
             float visibleHeight = 2f * ViewDistance * Mathf.Tan(camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
-            float scale = gridHeight > 0f ? visibleHeight * ViewFill / gridHeight : 1f;
+            float visibleWidth = visibleHeight * Mathf.Max(camera.aspect, 0.1f);
+
+            float scale = Mathf.Min(
+                gridHeight > 0f ? visibleHeight * ViewFill / gridHeight : 1f,
+                gridWidth > 0f ? visibleWidth * ViewFill / gridWidth : 1f);
 
             rootTransform.localScale = Vector3.one * scale;
 
@@ -333,6 +339,13 @@ namespace iiMenu.Managers
             canvas.renderMode = RenderMode.WorldSpace;
             canvasObject.AddComponent<CanvasScaler>().dynamicPixelsPerUnit = DynamicPixelsPerUnit;
             canvasObject.AddComponent<GraphicRaycaster>();
+
+            // A world space canvas gets a default rect that is nowhere near the grid, so
+            // the labels end up outside their own canvas. Stretch it over the grid.
+            RectTransform canvasRect = (RectTransform)canvasObject.transform;
+            canvasRect.sizeDelta = new Vector2(gridWidth, gridHeight);
+            canvasRect.localPosition = Vector3.zero;
+            canvasRect.localRotation = Quaternion.identity;
 
             Screen screen = new Screen
             {
@@ -354,12 +367,12 @@ namespace iiMenu.Managers
                 ? Main.textColors[1].GetColor(0)
                 : Color.white;
 
-            // In a world space canvas one local unit is dynamicPixelsPerUnit font units, and
-            // the whole root is then scaled to fit the camera. Work backwards from the size
-            // a glyph should end up on screen so the labels sit correctly inside the button
-            // regardless of how many entries there are.
-            float buttonHeight = CellHeight * 0.62f * FillInset;
-            float maxFontSize = 0.55f * buttonHeight * DynamicPixelsPerUnit / Mathf.Max(scale, 0.0001f);
+            // Label sizing is left entirely to TextMeshPro's auto-sizing, exactly the way
+            // the menu's own button text does it: start at fontSize 1 with a minimum of 0
+            // and let it grow to fill the box. Working the size out by hand from the root
+            // scale and dynamicPixelsPerUnit capped it so low the text collapsed to
+            // nothing, which is why the first version rendered as empty boxes.
+            float buttonHeight = CellHeight * ButtonFill * FillInset;
 
             float firstX = -gridWidth / 2f + CellWidth / 2f;
             float firstY = gridHeight / 2f - CellHeight / 2f;
@@ -376,7 +389,7 @@ namespace iiMenu.Managers
 
                 screen.Buttons[i] = CreateButton(rootTransform, position, idleMaterial);
                 screen.Fills[i] = CreateFill(rootTransform, position, fillMaterial);
-                CreateLabel(canvasObject.transform, position, labels[i], textColor, maxFontSize, buttonHeight);
+                CreateLabel(canvasObject.transform, position, labels[i], textColor, buttonHeight);
             }
 
             // CreatePrimitive and new GameObject both land on the default layer, so the
@@ -410,7 +423,6 @@ namespace iiMenu.Managers
 
             backdrop.GetComponent<Renderer>().sharedMaterial = CreateMaterial(color);
         }
-
         private static Transform CreateButton(Transform parent, Vector3 position, Material material)
         {
             GameObject button = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -420,9 +432,9 @@ namespace iiMenu.Managers
             button.transform.SetParent(parent, false);
             button.transform.localPosition = position;
             button.transform.localRotation = Quaternion.identity;
-            button.transform.localScale = new Vector3(CellWidth * FillInset, CellHeight * 0.62f * FillInset, ButtonThickness);
+            button.transform.localScale = new Vector3(CellWidth * FillInset, CellHeight * ButtonFill * FillInset, ButtonThickness);
 
-            button.GetComponent<Renderer>().sharedMaterial = material;
+            ApplyTint(button.GetComponent<Renderer>(), material);
 
             return button.transform;
         }
@@ -438,14 +450,33 @@ namespace iiMenu.Managers
             // A hair in front of the button face so it is not fighting it for depth.
             fill.transform.localPosition = position + new Vector3(0f, 0f, ButtonThickness * 0.6f);
             fill.transform.localRotation = Quaternion.identity;
-            fill.transform.localScale = new Vector3(0f, CellHeight * 0.62f * FillInset, 1f);
+            fill.transform.localScale = new Vector3(0f, CellHeight * ButtonFill * FillInset, 1f);
 
-            fill.GetComponent<Renderer>().sharedMaterial = material;
+            ApplyTint(fill.GetComponent<Renderer>(), material);
 
             return fill.transform;
         }
 
-        private static void CreateLabel(Transform canvas, Vector3 position, string text, Color color, float maxFontSize, float buttonHeight)
+        /// <summary>
+        /// Tints a renderer with the shared material, and adopts it as shared so Unity does
+        /// not hand back a per-renderer copy every time the property is read. Assigning a
+        /// freshly built material to sharedMaterial is what the first pass did wrong: the
+        /// tint never showed up on screen at all.
+        /// </summary>
+        private static void ApplyTint(Renderer target, Material material)
+        {
+            if (target == null || material == null)
+                return;
+
+            target.sharedMaterial = material;
+
+            if (material.HasProperty("_BaseColor"))
+                material.SetColor("_BaseColor", material.color);
+
+            target.SetPropertyBlock(null);
+        }
+
+        private static void CreateLabel(Transform canvas, Vector3 position, string text, Color color, float buttonHeight)
         {
             TextMeshPro label = new GameObject
             {
@@ -456,28 +487,31 @@ namespace iiMenu.Managers
             }.AddComponent<TextMeshPro>();
 
             label.font = activeFont;
+            label.fontStyle = activeFontStyle;
+            label.richText = true;
             label.color = color;
             label.alignment = TextAlignmentOptions.Center;
             label.overflowMode = TextOverflowModes.Overflow;
 
-            // Size the box before the text goes in, because auto-sizing measures against
-            // the rect and the first layout pass happens as soon as the text is set.
+            // Box first, because auto-sizing measures against the rect as soon as text
+            // lands in it.
             RectTransform rect = label.rectTransform;
+            rect.sizeDelta = new Vector2(CellWidth * FillInset, buttonHeight);
             rect.localPosition = position + new Vector3(0f, 0f, ButtonThickness * 1.2f);
             rect.localRotation = Quaternion.identity;
-            rect.sizeDelta = new Vector2(CellWidth * FillInset, buttonHeight);
 
-            // Entry names range from a couple of characters to something like
-            // "Disable Orange Leaderboards", so let the box shrink the type rather than
-            // letting a long name spill over the buttons next to it.
+            // This mirrors how the menu builds its own button text: start at 1 with a
+            // minimum of 0 and let auto-sizing grow it to whatever fits. No fontSizeMax,
+            // because pinning the cap is what made the text vanish.
             label.enableAutoSizing = true;
-            label.fontSizeMax = maxFontSize;
-            label.fontSizeMin = Mathf.Max(2f, maxFontSize * 0.25f);
-            label.fontSize = maxFontSize;
+            label.fontSizeMin = 0;
+            label.fontSize = 1;
 
             label.SafeSetText(text);
-            label.SafeSetFont(activeFont);
-            label.SafeSetFontStyle(activeFontStyle);
+
+            // Auto-sizing resolves during the next layout pass, so the atlas and the mesh
+            // have to be built now or the label sits invisible until something dirties it.
+            label.ForceMeshUpdate();
         }
 
         private static Material CreateMaterial(Color color)
@@ -497,8 +531,16 @@ namespace iiMenu.Managers
             if (unlitShader != null)
                 return unlitShader;
 
-            // Unlit so the fill reads as a flat progress bar rather than a lit box.
-            foreach (string name in new[] { "GUI/Text Shader", "Universal Render Pipeline/Unlit", "Sprites/Default", "Standard" })
+            // URP Unlit first, because that is what the menu already uses for unlit coloured
+            // surfaces and it definitely reads _BaseColor. "GUI/Text Shader" is only a UI
+            // shader and is not guaranteed to tint a 3D mesh.
+            foreach (string name in new[]
+            {
+                "Universal Render Pipeline/Unlit",
+                "Sprites/Default",
+                "GUI/Text Shader",
+                "Standard"
+            })
             {
                 Shader found = Shader.Find(name);
 
