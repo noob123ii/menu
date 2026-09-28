@@ -55,12 +55,8 @@ namespace iiMenu.Mods
 
         public static void SpawnKeyboard()
         {
-            // Without a VR device the on screen keyboard is unusable: its keys are driven
-            // by a hand collider entering a trigger, which cannot happen with no hands to
-            // move. The physical keyboard is then the only input left, but isKeyboardPc
-            // was derived from isOnPC, which only turns true once Q is pressed, and the
-            // on screen keyboard was spawned anyway. Both paths dead, so the field could
-            // be focused but nothing could ever be typed into it.
+            // The on screen keyboard is driven by hand colliders, so it is unusable with no
+            // XR device and the physical keyboard is the only remaining input.
             isKeyboardPc = !XRSettings.isDeviceActive || isOnPC || toggleButtonActive && keyboardWithToggleButton;
             inTextInput = true;
             keyboardInput = "";
@@ -6010,10 +6006,7 @@ exit 0";
                         UpdateSearch();
                 }
 
-                // This used to bail out here when no VR device was active, which made the
-                // non VR branch a few lines below unreachable: the mouse raycast that
-                // branch performs could never run, so nothing on the UI could be pointed
-                // at or selected. The branch already handles both cases, so let it.
+                // The non VR branch below handles the mouse case, so no early exit here.
 
                 if (clickGuiLine == null)
                 {
@@ -6091,10 +6084,7 @@ exit 0";
                         clickGuiLine.gameObject.SetActive(true);
                 }
 
-                // Everything below drives press, release and click off this one flag, and it
-                // used to be the controller trigger only. With no VR device there is no
-                // trigger, so nothing could ever be clicked, including the search field
-                // and the on screen keyboard. Use the left mouse button in that case.
+                // Press, release and click are all driven off this flag.
                 bool trigger = !XRSettings.isDeviceActive
                     ? Mouse.current != null && Mouse.current.leftButton.isPressed
                     : useLeft ? leftTrigger > 0.5f : rightTrigger > 0.5f;
@@ -6128,9 +6118,8 @@ exit 0";
                     ExecuteEvents.Execute(pressedUI, pointerData, ExecuteEvents.pointerDownHandler);
                     pointerData.pointerPress = pressedUI;
 
-                    // This only sends pointer events, and a TMP_InputField only takes focus
-                    // through the select handler, which nothing was ever sending. So the
-                    // field could be clicked and never become editable. Send select here.
+                    // An input field takes focus through select, which pointer events alone
+                    // do not send.
                     if (targetField != null)
                         UI.FocusControlField(targetField);
 
@@ -6391,9 +6380,7 @@ exit 0";
         {
             string seperator = ";;";
 
-            // These used to be built with 'x += ...' inside a loop over every button in
-            // the menu, which reallocates and recopies the whole buffer on each step.
-            // With ~800 buttons that is quadratic and it ran on the 60 second autosave.
+            // StringBuilder rather than repeated concatenation, which is quadratic here.
             System.Text.StringBuilder enabledBuilder = new System.Text.StringBuilder();
             System.Text.StringBuilder favoriteBuilder = new System.Text.StringBuilder();
 
