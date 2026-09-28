@@ -40,6 +40,9 @@ namespace iiMenu.Menu
             uiPrefab = LoadObject<GameObject>("UI");
 
             Transform canvas = uiPrefab.transform.Find("Canvas");
+            prefabCanvas = canvas.GetComponent<Canvas>();
+            prefabRaycaster = canvas.GetComponent<GraphicRaycaster>();
+            LogManager.Log($"UI prefab canvas: raycaster={(prefabRaycaster != null ? "present" : "MISSING")}");
             watermark = canvas.Find("Watermark").GetComponent<Image>();
             versionLabel = canvas.Find("VersionLabel").GetComponent<TextMeshProUGUI>();
             roomStatus = canvas.Find("RoomStatus").GetComponent<TextMeshProUGUI>();
@@ -55,6 +58,15 @@ namespace iiMenu.Menu
             g = canvas.Find("ControlUI/G").GetComponent<TMP_InputField>();
             b = canvas.Find("ControlUI/B").GetComponent<TMP_InputField>();
             textInput = canvas.Find("ControlUI/TextInput").GetComponent<TMP_InputField>();
+
+            // These four fields only ever had their button listeners wired up. Typing into
+            // them relies on Unity's own UI input module, which the menu never adds, and
+            // the scene's EventSystem has none that delivers text, so a field could be
+            // clicked and focused but never receive a character. Track which one has
+            // focus and edit it directly from the keyboard instead.
+            foreach (TMP_InputField controlField in new[] { r, g, b, textInput })
+                WatchControlField(controlField);
+
             LogManager.Log(canvas.Find("ControlUI/QueueButton"));
             canvas.Find("ControlUI/QueueButton").GetComponent<Button>().onClick.AddListener(() =>
             {
@@ -183,6 +195,117 @@ namespace iiMenu.Menu
         private TMP_InputField g;
         private TMP_InputField b;
         private TMP_InputField textInput;
+
+        /// <summary>Which ControlUI field currently has focus, if any.</summary>
+        private static TMP_InputField focusedControlField;
+
+        /// <summary>
+        /// The prefab canvas, exposed so the click handling can raycast it. ControlUI lives
+        /// on this canvas rather than on the menu canvas, so without this the name and
+        /// colour fields are never pointed at.
+        /// </summary>
+        public static Canvas prefabCanvas;
+
+        /// <summary>The prefab canvas' own raycaster.</summary>
+        public static GraphicRaycaster prefabRaycaster;
+
+        private static readonly List<KeyCode> controlFieldKeys = new List<KeyCode>
+        {
+            KeyCode.A, KeyCode.B, KeyCode.C, KeyCode.D, KeyCode.E, KeyCode.F, KeyCode.G,
+            KeyCode.H, KeyCode.I, KeyCode.J, KeyCode.K, KeyCode.L, KeyCode.M, KeyCode.N,
+            KeyCode.O, KeyCode.P, KeyCode.Q, KeyCode.R, KeyCode.S, KeyCode.T, KeyCode.U,
+            KeyCode.V, KeyCode.W, KeyCode.X, KeyCode.Y, KeyCode.Z,
+            KeyCode.Alpha0, KeyCode.Alpha1, KeyCode.Alpha2, KeyCode.Alpha3, KeyCode.Alpha4,
+            KeyCode.Alpha5, KeyCode.Alpha6, KeyCode.Alpha7, KeyCode.Alpha8, KeyCode.Alpha9,
+            KeyCode.Space, KeyCode.Minus, KeyCode.Period, KeyCode.Comma, KeyCode.Slash,
+            KeyCode.Semicolon, KeyCode.Quote
+        };
+
+        /// <summary>
+        /// Gives a ControlUI field focus from the menu's own click handling. The scene's
+        /// EventSystem is VR oriented and never sends select, so this is what actually makes
+        /// the field editable.
+        /// </summary>
+        public static void FocusControlField(TMP_InputField field)
+        {
+            if (focusedControlField == field)
+                return;
+
+            focusedControlField = field;
+            field.ActivateInputField();
+            field.caretPosition = field.text != null ? field.text.Length : 0;
+
+            LogManager.Log($"[InputDiag] focused ControlUI field {field.name}, text=\"{field.text}\"");
+        }
+
+        private static void WatchControlField(TMP_InputField field)
+        {
+            field.onSelect.AddListener(_ => focusedControlField = field);
+            field.onDeselect.AddListener(_ =>
+            {
+                if (focusedControlField == field)
+                    focusedControlField = null;
+            });
+        }
+
+        /// <summary>
+        /// Edits the focused ControlUI field straight from the keyboard. This deliberately
+        /// does not go through the prompt keyboard, which is a separate buffer and is only
+        /// active while a prompt is open.
+        /// </summary>
+        private static void UpdateControlField()
+        {
+            TMP_InputField field = focusedControlField;
+
+            if (field == null || inTextInput || Instance == null || !Instance.isOpen)
+                return;
+
+            bool shift = UnityInput.Current.GetKey(KeyCode.LeftShift) || UnityInput.Current.GetKey(KeyCode.RightShift);
+
+            if (UnityInput.Current.GetKeyDown(KeyCode.Backspace))
+            {
+                if (field.text.Length > 0)
+                {
+                    field.text = field.text[..^1];
+                    field.caretPosition = field.text.Length;
+                }
+
+                return;
+            }
+
+            foreach (KeyCode key in controlFieldKeys)
+            {
+                if (!UnityInput.Current.GetKeyDown(key))
+                    continue;
+
+                if (key == KeyCode.Space)
+                    field.text += " ";
+                else if (key == KeyCode.Minus)
+                    field.text += shift ? "_" : "-";
+                else if (key == KeyCode.Period)
+                    field.text += shift ? ">" : ".";
+                else if (key == KeyCode.Comma)
+                    field.text += shift ? "<" : ",";
+                else if (key == KeyCode.Slash)
+                    field.text += shift ? "?" : "/";
+                else if (key == KeyCode.Semicolon)
+                    field.text += shift ? ":" : ";";
+                else if (key == KeyCode.Quote)
+                    field.text += shift ? "\"" : "'";
+                else
+                {
+                    string name = key.ToString();
+                    string character = name.StartsWith("Alpha") ? name[5..] : name.ToLower();
+                    field.text += shift ? character.ToUpper() : character;
+                }
+
+                field.caretPosition = field.text.Length;
+                LogManager.Log($"[InputDiag] ControlUI field {field.name} now \"{field.text}\"");
+                break;
+            }
+        }
+
+        private void LateUpdate() => UpdateControlField();
 
         private Image controlBackground;
         private List<TextMeshProUGUI> textObjects;

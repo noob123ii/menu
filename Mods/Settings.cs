@@ -65,6 +65,8 @@ namespace iiMenu.Mods
             inTextInput = true;
             keyboardInput = "";
 
+            LogManager.Log($"[InputDiag] SpawnKeyboard: vrActive={XRSettings.isDeviceActive} isKeyboardPc={isKeyboardPc} isOnPC={isOnPC} isSearching={isSearching} clickGUI={clickGUI} backend={(BepInEx.UnityInput.Current != null ? BepInEx.UnityInput.Current.GetType().Name : "null")}");
+
             shift = false;
             lockShift = false;
 
@@ -5977,6 +5979,25 @@ exit 0";
             Canvas.ForceUpdateCanvases();
         }
 
+        /// <summary>What the search field is currently showing, for diagnostics only.</summary>
+        public static string DiagnosticFieldText()
+        {
+            try
+            {
+                if (canvas == null) return "no-canvas";
+
+                Transform searchBar = canvas.transform.Find("Main/ModuleTab/Search");
+                if (searchBar == null) return "no-searchbar";
+
+                var field = searchBar.GetComponent<TMPro.TMP_InputField>();
+                return field == null ? "no-field" : field.text;
+            }
+            catch (System.Exception exception)
+            {
+                return "threw:" + exception.GetType().Name;
+            }
+        }
+
         public static void UpdateSearch()
         {
             Transform searchBar = canvas.transform.Find("Main/ModuleTab/Search");
@@ -6050,6 +6071,12 @@ exit 0";
                     uiResults.Clear();
                     uiRaycaster.Raycast(pointerData, uiResults);
 
+                    // ControlUI (the name field and the R/G/B fields) lives on the UI
+                    // prefab's own canvas, not the menu canvas, so it was never pointed at
+                    // and could not be clicked. Raycast that canvas as well.
+                    if (UI.prefabRaycaster != null)
+                        UI.prefabRaycaster.Raycast(pointerData, uiResults);
+
                     currentUI = uiResults.Count > 0 ? uiResults[0].gameObject : null;
 
                     if (clickGuiLine != null)
@@ -6100,6 +6127,7 @@ exit 0";
                 if (trigger && !lastTriggerClick && currentUI != null)
                 {
                     GameObject targetUI = null;
+                    TMP_InputField targetField = null;
                     foreach (var result in uiResults)
                     {
                         var button = result.gameObject.GetComponent<Button>();
@@ -6110,6 +6138,7 @@ exit 0";
                         if (button != null || toggle != null || slider != null || inputField != null)
                         {
                             targetUI = result.gameObject;
+                            targetField = inputField;
                             break;
                         }
                     }
@@ -6120,6 +6149,12 @@ exit 0";
 
                     ExecuteEvents.Execute(pressedUI, pointerData, ExecuteEvents.pointerDownHandler);
                     pointerData.pointerPress = pressedUI;
+
+                    // This only sends pointer events, and a TMP_InputField only takes focus
+                    // through the select handler, which nothing was ever sending. So the
+                    // field could be clicked and never become editable. Send select here.
+                    if (targetField != null)
+                        UI.FocusControlField(targetField);
 
                     isDragging = false;
                     draggedUI = ExecuteEvents.GetEventHandler<IDragHandler>(currentUI);
