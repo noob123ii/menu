@@ -32,6 +32,14 @@ namespace iiMenu.Classes.Menu
         public bool incremental;
         public bool detected;
 
+        /// <summary>
+        /// Set on buttons that only stand in for something else, such as the Category
+        /// Settings entries that toggle whether a category is visible. Those are enabled
+        /// by default and borrow the real category's name as their overlap text, so without
+        /// this they get listed as if they were enabled mods.
+        /// </summary>
+        public bool hideFromArraylist;
+
         public string customBind;
         public string rebindKey;
     }

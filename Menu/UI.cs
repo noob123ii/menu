@@ -319,7 +319,7 @@ namespace iiMenu.Menu
                     {
                         try
                         {
-                            if (!button.enabled || (hideSettings && (!hideSettings ||
+                            if (!button.enabled || button.hideFromArraylist || (hideSettings && (!hideSettings ||
                                                                      Buttons.categoryNames[categoryIndex]
                                                                          .Contains("Settings")))) continue;
                             string buttonText = button.overlapText ?? button.buttonText;
