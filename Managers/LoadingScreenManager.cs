@@ -62,6 +62,7 @@ namespace iiMenu.Managers
         private bool drewOnce;
 
         private Color panel;
+        private Color backdrop;
         private Color button;
         private Color accent;
         private Color fill;
@@ -104,6 +105,10 @@ namespace iiMenu.Managers
             fill = Color.Lerp(button, Color.white, 0.32f);
             if (fill == button)
                 fill = Color.Lerp(button, accent, 0.5f);
+
+            // Full screen backdrop: the panel's own hue taken almost to black, so it
+            // belongs to the theme but lets the panel and the accent carry the screen.
+            backdrop = new Color(panel.r * 0.3f, panel.g * 0.3f, panel.b * 0.3f, 0.94f);
 
             Font font = MenuFont();
 
@@ -205,6 +210,10 @@ namespace iiMenu.Managers
                 drewOnce = true;
                 LogManager.Log($"Loading screen: first draw at {Screen.width}x{Screen.height}.");
             }
+
+            // A full screen backdrop so this reads as an overlay that has taken over the
+            // view, not as a stray panel, while the panel itself keeps the menu's look.
+            Fill(new Rect(0f, 0f, Screen.width, Screen.height), backdrop);
 
             float width = Mathf.Clamp(Screen.width * 0.30f, 340f, 520f);
             float rowHeight = 42f;
