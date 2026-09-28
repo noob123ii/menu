@@ -1328,33 +1328,6 @@ namespace iiMenu.Menu
                 // Plugins
                 PluginManager.ExecuteUpdate();
 
-                // Loading screen. Two triggers, because neither is reliable on its own:
-                // the menu opening (edge triggered, with a cooldown) and F9.
-                //
-                // F9 is read straight off Unity's InputSystem rather than through the
-                // game's UnityInput wrapper. That wrapper is VR backed, so when no VR
-                // runtime is present it reports nothing at all and the menu cannot be
-                // opened either, which left the feature with no way to reach it.
-                if (LoadingScreenManager.PlayOnMenuOpen)
-                {
-                    bool loadingScreenMenuOpen = isMenuButtonHeld;
-
-                    if (loadingScreenMenuOpen && !loadingScreenMenuHeld && Time.time > loadingScreenMenuCooldown)
-                    {
-                        // Cooldown so flicking the menu key does not rebuild every time.
-                        loadingScreenMenuCooldown = Time.time + 1f;
-                        LoadingScreenManager.Show();
-                    }
-
-                    loadingScreenMenuHeld = loadingScreenMenuOpen;
-                }
-
-                if (LoadingScreenHotkeyPressed())
-                {
-                    loadingScreenHotkeyCooldown = Time.time + 1f;
-                    LoadingScreenManager.Show();
-                }
-
                 // Menu
                 // Written as a plain nested loop rather than SelectMany().Where(): this
                 // runs every frame over every button in the menu, and the LINQ form
@@ -1618,35 +1591,6 @@ namespace iiMenu.Menu
             }
 
             postActions.Clear();
-        }
-
-        /// <summary>
-        /// Plays the loading screen whenever the menu is opened.
-        /// </summary>
-        private static bool loadingScreenMenuHeld;
-        private static float loadingScreenMenuCooldown;
-        private static float loadingScreenHotkeyCooldown;
-
-        /// <summary>
-        /// Reads the loading screen key straight off Unity's InputSystem.
-        /// UnityInput is VR backed, so it returns nothing at all when no VR runtime is
-        /// present, which is exactly the case where there is no menu to click.
-        /// </summary>
-        private static bool LoadingScreenHotkeyPressed()
-        {
-            if (Time.time < loadingScreenHotkeyCooldown)
-                return false;
-
-            try
-            {
-                Keyboard keyboard = Keyboard.current;
-
-                if (keyboard != null && keyboard.f9Key.wasPressedThisFrame)
-                    return true;
-            }
-            catch { }
-
-            return false;
         }
 
         public static List<KeyCode> lastPressedKeys = new List<KeyCode>();        public static readonly Dictionary<KeyCode, (float, float)> keyPressedTimes = new Dictionary<KeyCode, (float, float)>();

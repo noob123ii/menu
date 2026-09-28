@@ -75,8 +75,8 @@ namespace iiMenu
             // whether a VR runtime came up. Everything in this menu is driven through the
             // game's VR backed input wrapper, so when VR is missing nothing is operable,
             // and that is worth knowing from the log rather than guessing.
-            LogManager.Log($"[Startup] loading screen build marker LS-1 active. " +
-                           $"autoplayOnMenuOpen={LoadingScreenManager.PlayOnMenuOpen} " +
+            LogManager.Log($"[Startup] loading screen build marker LS-2 active. " +
+                           $"autoplayOnStartup={LoadingScreenManager.PlayOnceOnStartup} " +
                            $"vrActive={SystemInfoVR()}");
 
             string logoLines = PluginInfo.Logo.Split(@"

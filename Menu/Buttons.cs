@@ -47,9 +47,7 @@ namespace iiMenu.Menu
                 new ButtonInfo { buttonText = "Settings", method =() => CurrentCategoryName = "Settings", isTogglable = false, toolTip = "Opens the settings tab."},
                 new ButtonInfo { buttonText = "Players", method = Settings.PlayersTab, isTogglable = false, toolTip = "Opens the players tab."},
 
-                new ButtonInfo { buttonText = "Loading Screen", method = LoadingScreenManager.Show, isTogglable = false, toolTip = "Plays a loading screen, one entry at a time, on the first person and third person cameras at once."},
-
-                new ButtonInfo { buttonText = "Auto Loading Screen", overlapText = "Auto Loading Screen <color=grey>[</color><color=green>On</color><color=grey>]</color>", enableMethod =() => { LoadingScreenManager.PlayOnMenuOpen = true; Buttons.GetIndex("Auto Loading Screen").overlapText = "Auto Loading Screen <color=grey>[</color><color=green>On</color><color=grey>]</color>"; }, disableMethod =() => { LoadingScreenManager.PlayOnMenuOpen = false; Buttons.GetIndex("Auto Loading Screen").overlapText = "Auto Loading Screen <color=grey>[</color><color=green>Off</color><color=grey>]</color>"; }, enabled = true, toolTip = "Plays the loading screen automatically every time you open the menu."},
+                new ButtonInfo { buttonText = "Loading Screen", method = LoadingScreenManager.Show, isTogglable = false, toolTip = "Plays the loading screen again. It also plays by itself shortly after the game starts."},
 
                 new ButtonInfo { buttonText = "Favorite Mods", method =() => CurrentCategoryName = "Favorite Mods", isTogglable = false, toolTip = "Opens your favorite mods. Favorite mods with left grip."},
                 new ButtonInfo { buttonText = "Enabled Mods", method =() => CurrentCategoryName = "Enabled Mods", isTogglable = false, toolTip = "Shows all mods you have enabled."},
