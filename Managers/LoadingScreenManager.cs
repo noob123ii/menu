@@ -464,6 +464,10 @@ namespace iiMenu.Managers
             scaler.dynamicPixelsPerUnit = 2500f;
 
             created.AddComponent<GraphicRaycaster>();
+
+            // NewLabel parents itself to this, so it has to be recorded here or the very
+            // first label dereferences null.
+            canvasObject = created;
         }
 
         private static Transform CreateButton(GameObject builtRoot, Layout layout, int index)
