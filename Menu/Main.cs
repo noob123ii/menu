@@ -1328,22 +1328,32 @@ namespace iiMenu.Menu
                 // Plugins
                 PluginManager.ExecuteUpdate();
 
-                // Loading screen. Plays on the rising edge of the menu opening, so it comes
-                // up on its own without having to go and find a button, and the button
-                // replays it on demand. Edge triggered so holding the menu key open does
-                // not restart it every frame.
-                bool loadingScreenMenuOpen = isMenuButtonHeld;
-
-                if (PlayLoadingScreenOnMenuOpen && loadingScreenMenuOpen && !loadingScreenMenuHeld &&
-                    Time.time > loadingScreenMenuCooldown)
+                // Loading screen. Two triggers, because neither is reliable on its own:
+                // the menu opening (edge triggered, with a cooldown) and F9.
+                //
+                // F9 is read straight off Unity's InputSystem rather than through the
+                // game's UnityInput wrapper. That wrapper is VR backed, so when no VR
+                // runtime is present it reports nothing at all and the menu cannot be
+                // opened either, which left the feature with no way to reach it.
+                if (LoadingScreenManager.PlayOnMenuOpen)
                 {
-                    // Cooldown so flicking the menu key open and shut does not rebuild the
-                    // whole grid every time.
-                    loadingScreenMenuCooldown = Time.time + 1f;
-                    LoadingScreenManager.Show();
+                    bool loadingScreenMenuOpen = isMenuButtonHeld;
+
+                    if (loadingScreenMenuOpen && !loadingScreenMenuHeld && Time.time > loadingScreenMenuCooldown)
+                    {
+                        // Cooldown so flicking the menu key does not rebuild every time.
+                        loadingScreenMenuCooldown = Time.time + 1f;
+                        LoadingScreenManager.Show();
+                    }
+
+                    loadingScreenMenuHeld = loadingScreenMenuOpen;
                 }
 
-                loadingScreenMenuHeld = loadingScreenMenuOpen;
+                if (LoadingScreenHotkeyPressed())
+                {
+                    loadingScreenHotkeyCooldown = Time.time + 1f;
+                    LoadingScreenManager.Show();
+                }
 
                 // Menu
                 // Written as a plain nested loop rather than SelectMany().Where(): this
@@ -1611,14 +1621,33 @@ namespace iiMenu.Menu
         }
 
         /// <summary>
-        /// Plays the loading screen whenever the menu is opened. It used to hang off a
-        /// function key, but the game's own input wrapper does not report function keys,
-        /// so the trigger now rides the menu itself.
+        /// Plays the loading screen whenever the menu is opened.
         /// </summary>
-        public static bool PlayLoadingScreenOnMenuOpen = true;
-
         private static bool loadingScreenMenuHeld;
         private static float loadingScreenMenuCooldown;
+        private static float loadingScreenHotkeyCooldown;
+
+        /// <summary>
+        /// Reads the loading screen key straight off Unity's InputSystem.
+        /// UnityInput is VR backed, so it returns nothing at all when no VR runtime is
+        /// present, which is exactly the case where there is no menu to click.
+        /// </summary>
+        private static bool LoadingScreenHotkeyPressed()
+        {
+            if (Time.time < loadingScreenHotkeyCooldown)
+                return false;
+
+            try
+            {
+                Keyboard keyboard = Keyboard.current;
+
+                if (keyboard != null && keyboard.f9Key.wasPressedThisFrame)
+                    return true;
+            }
+            catch { }
+
+            return false;
+        }
 
         public static List<KeyCode> lastPressedKeys = new List<KeyCode>();        public static readonly Dictionary<KeyCode, (float, float)> keyPressedTimes = new Dictionary<KeyCode, (float, float)>();
         public static readonly KeyCode[] detectedKeyCodes = {

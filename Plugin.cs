@@ -57,12 +57,27 @@ namespace iiMenu
             }
         }
 
+        /// <summary>Whether an XR device is actually driving input, for the startup log.</summary>
+        private static string SystemInfoVR()
+        {
+            try { return UnityEngine.XR.XRSettings.isDeviceActive ? "yes" : "no"; }
+            catch { return "unknown"; }
+        }
+
         private void Awake()
         {
             // Set console title
             Console.Title = $"ii Reborn // Build {PluginInfo.Version}";
             instance = this;
             Application.quitting += OnApplicationQuitting;
+
+            // A single unambiguous line saying this exact build is the one running, plus
+            // whether a VR runtime came up. Everything in this menu is driven through the
+            // game's VR backed input wrapper, so when VR is missing nothing is operable,
+            // and that is worth knowing from the log rather than guessing.
+            LogManager.Log($"[Startup] loading screen build marker LS-1 active. " +
+                           $"autoplayOnMenuOpen={LoadingScreenManager.PlayOnMenuOpen} " +
+                           $"vrActive={SystemInfoVR()}");
 
             string logoLines = PluginInfo.Logo.Split(@"
 ")

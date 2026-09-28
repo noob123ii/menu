@@ -49,6 +49,9 @@ namespace iiMenu.Managers
         /// <summary>True while the loading screen exists on screen.</summary>
         public static bool Active { get; private set; }
 
+        /// <summary>Plays the loading screen automatically every time the menu is opened.</summary>
+        public static bool PlayOnMenuOpen = true;
+
         /// <summary>How long a single entry takes to fill, in seconds.</summary>
         public static float EntryDuration = 0.28f;
 
