@@ -3231,9 +3231,12 @@ namespace iiMenu.Mods
 
                 TextMeshPro tmp = container.transform.Find("text").GetComponent<TextMeshPro>();
 
+                NetPlayer player = GetPlayerFromVRRig(vrrig);
+                if (player == null) continue;
+
                 if (NameTagOptimize())
                 {
-                    tmp.SafeSetText(CleanPlayerName(GetPlayerFromVRRig(vrrig).NickName));
+                    tmp.SafeSetText(CleanPlayerName(player.NickName));
                     tmp.SafeSetFontStyle(FontStyles.Normal);
                     tmp.SafeSetFont(Minecraft);
                     tmp.margin = Vector4.zero;

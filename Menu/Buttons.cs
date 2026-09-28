@@ -42,6 +42,7 @@ using UnityEngine;
 using static iiMenu.Menu.Main;
 using static iiMenu.Utilities.RandomUtilities;
 using static iiMenu.Utilities.RigUtilities;
+using static iiMenu.Mods.Settings;
 using Application = UnityEngine.Application;
 using Console = iiMenu.Classes.Menu.Console;
 using Random = UnityEngine.Random;

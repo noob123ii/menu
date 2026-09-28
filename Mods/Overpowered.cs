@@ -6220,6 +6220,13 @@ namespace iiMenu.Mods
             else
                 NotificationManager.SendNotification("<color=grey>[</color><color=red>ERROR</color><color=grey>]</color> You are not in a room.");
         }
+        public static void ElevatorKick()
+        {
+            GRElevatorManager._instance.SendRPC("RemoteElevatorButtonPress", 2, new object[] { new int[]{
+                3,
+                (int)GRElevatorManager._instance.currentLocation
+            }});
+        }
 
         private static float elevatorKickDelay;
         public static void ElevatorKickGun()
@@ -6231,16 +6238,11 @@ namespace iiMenu.Mods
 
                 if (GetGunInput(true))
                 {
-                    VRRig gunTarget = iiMenu.Utilities.RigUtilities.GetRigFromHit(Ray);
-                    if (gunTarget && !gunTarget.IsLocal() && Time.time > elevatorKickDelay)
+                    VRRig Target = GetRigFromHit(Ray);
+                    if (Target && !Target.IsLocal() && Time.time > elevatorKickDelay)
                     {
                         elevatorKickDelay = Time.time + 0.5f;
-
-                        if (PhotonNetwork.IsMasterClient)
-                            SpecialTimeRPC(GRElevatorManager._instance.photonView, -750, "RemoteActivateTeleport", new RaiseEventOptions { TargetActors = new[] { gunTarget.GetPlayer().ActorNumber } }, (int)GRElevatorManager._instance.currentLocation, 3, GRElevatorManager.LowestActorNumberInElevator());
-                        else
-                            GRElevatorManager._instance.SendRPC("RemoteElevatorButtonPress", RpcTarget.MasterClient, new[] { 3, (int)GRElevatorManager._instance.currentLocation });
-
+                        ElevatorKick();
                         RPCProtection();
                     }
                 }
@@ -6249,10 +6251,7 @@ namespace iiMenu.Mods
 
         public static void ElevatorKickAll()
         {
-            if (PhotonNetwork.IsMasterClient)
-                SpecialTimeRPC(GRElevatorManager._instance.photonView, -750, "RemoteActivateTeleport", new RaiseEventOptions { Receivers = ReceiverGroup.Others }, (int)GRElevatorManager._instance.currentLocation, 2, GRElevatorManager.LowestActorNumberInElevator());
-            else
-                GRElevatorManager._instance.SendRPC("RemoteElevatorButtonPress", RpcTarget.MasterClient, new[] { 3, (int)GRElevatorManager._instance.currentLocation });
+            ElevatorKick();
         }
 
         public static void ElevatorKickAura()
@@ -6272,12 +6271,8 @@ namespace iiMenu.Mods
             {
                 foreach (VRRig nearbyPlayer in nearbyPlayers)
                 {
-                    if (PhotonNetwork.IsMasterClient)
-                        SpecialTimeRPC(GRElevatorManager._instance.photonView, -750, "RemoteActivateTeleport", new RaiseEventOptions { TargetActors = new[] { nearbyPlayer.GetPlayer().ActorNumber } }, (int)GRElevatorManager._instance.currentLocation, 3, GRElevatorManager.LowestActorNumberInElevator());
-                    else
-                        GRElevatorManager._instance.SendRPC("RemoteElevatorButtonPress", RpcTarget.MasterClient, new[] { 3, (int)GRElevatorManager._instance.currentLocation });
-
-                     RPCProtection();
+                    ElevatorKick();
+                    RPCProtection();
                 }
             }
         }
@@ -6304,11 +6299,7 @@ namespace iiMenu.Mods
             {
                 foreach (VRRig rig in touchedPlayers)
                 {
-                    if (PhotonNetwork.IsMasterClient)
-                        SpecialTimeRPC(GRElevatorManager._instance.photonView, -750, "RemoteActivateTeleport", new RaiseEventOptions { TargetActors = new[] { rig.GetPlayer().ActorNumber } }, (int)GRElevatorManager._instance.currentLocation, 3, GRElevatorManager.LowestActorNumberInElevator());
-                    else
-                        GRElevatorManager._instance.SendRPC("RemoteElevatorButtonPress", RpcTarget.MasterClient, new[] { 3, (int)GRElevatorManager._instance.currentLocation });
-
+                    ElevatorKick();
                     RPCProtection();
                 }
             }
@@ -6648,7 +6639,7 @@ namespace iiMenu.Mods
 
                 if (GetGunInput(true))
                 {
-                    VRRig gunTarget = iiMenu.Utilities.RigUtilities.GetRigFromHit(Ray);
+                    VRRig gunTarget = GetRigFromHit(Ray);
                     if (gunTarget && !gunTarget.IsLocal() && Time.time > greyZoneDelay)
                     {
                         greyZoneDelay = Time.time + 0.1f;

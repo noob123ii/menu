@@ -1015,6 +1015,56 @@ exit 0";
 
             Buttons.GetIndex("Change Menu Button").overlapText = "Change Menu Button <color=grey>[</color><color=green>" + buttonNames[menuButtonIndex] + "</color><color=grey>]</color>";
         }
+
+        public static int gradientColor1Index = 0;
+        public static int gradientColor2Index = 2;
+
+        private static readonly Color[] gradientPresets = {
+            new Color(0f, 0.67f, 1f),
+            new Color(1f, 0.33f, 0f),
+            new Color(0f, 1f, 0.5f),
+            new Color(1f, 0f, 0.5f),
+            new Color(1f, 1f, 0f),
+            new Color(0.5f, 0f, 1f),
+            new Color(1f, 1f, 1f),
+            new Color(0f, 0f, 0f)
+        };
+
+        private static readonly string[] gradientColorNames = {
+            "Blue", "Orange", "Green", "Pink", "Yellow", "Purple", "White", "Black"
+        };
+
+        public static Color GetGradientColor1() => gradientPresets[gradientColor1Index % gradientPresets.Length];
+        public static Color GetGradientColor2() => gradientPresets[gradientColor2Index % gradientPresets.Length];
+
+        public static void ChangeGradientColor1(bool positive = true)
+        {
+            if (positive)
+                gradientColor1Index++;
+            else
+                gradientColor1Index--;
+
+            gradientColor1Index %= gradientPresets.Length;
+            if (gradientColor1Index < 0)
+                gradientColor1Index = gradientPresets.Length - 1;
+
+            Buttons.GetIndex("Change Gradient Color 1").overlapText = "Change Gradient Color 1 <color=grey>[</color><color=green>" + gradientColorNames[gradientColor1Index] + "</color><color=grey>]</color>";
+        }
+
+        public static void ChangeGradientColor2(bool positive = true)
+        {
+            if (positive)
+                gradientColor2Index++;
+            else
+                gradientColor2Index--;
+
+            gradientColor2Index %= gradientPresets.Length;
+            if (gradientColor2Index < 0)
+                gradientColor2Index = gradientPresets.Length - 1;
+
+            Buttons.GetIndex("Change Gradient Color 2").overlapText = "Change Gradient Color 2 <color=grey>[</color><color=green>" + gradientColorNames[gradientColor2Index] + "</color><color=grey>]</color>";
+        }
+
         public static void ChangeMenuTheme(bool increment = true)
         {
             if (increment) 
@@ -4601,13 +4651,16 @@ exit 0";
                 "Default",
                 "Lightning",
                 "Wavy",
-                "Blocky",
-                "Zigzag",
                 "Spring",
                 "Bouncy",
                 "Audio",
                 "Bezier",
-                "Rope"
+                "Rope",
+                "Smooth Wobble",
+                "Pulsing",
+                "Vibrate",
+                "Plasma",
+                "Gradient"
             };
 
             if (positive)
@@ -6169,6 +6222,8 @@ exit 0";
                 Safety.watchdogIntervalIndex.ToString(),
                 (Safety.visualizePressRadius ? "1" : "0"),
                 Safety.micGateHoldIndex.ToString(),
+                gradientColor1Index.ToString(),
+                gradientColor2Index.ToString(),
                 PrefsFormatVersion.ToString()
             };
 
@@ -6501,6 +6556,11 @@ exit 0";
 
                     Safety.micGateHoldIndex = GetPreferenceInt(data, 77, 2) - 1;
                     Safety.ChangeMicGateHoldTime();
+
+                    if (data.Length > 78) gradientColor1Index = int.Parse(data[78]) - 1;
+                    ChangeGradientColor1();
+                    if (data.Length > 79) gradientColor2Index = int.Parse(data[79]) - 1;
+                    ChangeGradientColor2();
 
                     SoundboardManager.ApplySettings();
                     try
