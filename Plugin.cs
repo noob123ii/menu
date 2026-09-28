@@ -75,8 +75,7 @@ namespace iiMenu
             // whether a VR runtime came up. Everything in this menu is driven through the
             // game's VR backed input wrapper, so when VR is missing nothing is operable,
             // and that is worth knowing from the log rather than guessing.
-            LogManager.Log($"[Startup] loading screen build marker LS-2 active. " +
-                           $"autoplayOnStartup={LoadingScreenManager.PlayOnceOnStartup} " +
+            LogManager.Log($"[Startup] ii Reborn build {PluginInfo.Version} active. " +
                            $"vrActive={SystemInfoVR()}");
 
             string logoLines = PluginInfo.Logo.Split(@"
@@ -165,12 +164,6 @@ namespace iiMenu
             if (CoroutineManager.instance != null)
             {
                 CoroutineManager.instance.StartCoroutine(iiMenu.Mods.Important.MapStateReport());
-
-                // The loading screen plays itself once shortly after boot. Every other
-                // trigger for it depends on input, and the game's input wrapper is VR
-                // backed, so with no VR runtime nothing in the menu can be operated at all
-                // and the feature would otherwise be unreachable.
-                CoroutineManager.instance.StartCoroutine(Managers.LoadingScreenManager.PlayOnStartup());
             }
         }
 
