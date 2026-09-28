@@ -64,12 +64,14 @@ namespace iiMenu.Menu
             textInput = canvas.Find("ControlUI/TextInput").GetComponent<TMP_InputField>();
 
             // These four fields only ever had their button listeners wired up. Typing into
-            // them relies on Unity's own UI input module, which the menu never adds, and
-            // the scene's EventSystem has none that delivers text, so a field could be
+            // them relies on Unity's own UI input module, which the menu never adds, and the
+            // scene's EventSystem has none that delivers text, so a field could be
             // clicked and focused but never receive a character. Track which one has
             // focus and edit it directly from the keyboard instead.
-            foreach (TMP_InputField controlField in new[] { r, g, b, textInput })
-                WatchControlField(controlField);
+            WatchControlField(r, true);
+            WatchControlField(g, true);
+            WatchControlField(b, true);
+            WatchControlField(textInput, false);
 
             LogManager.Log(canvas.Find("ControlUI/QueueButton"));
             canvas.Find("ControlUI/QueueButton").GetComponent<Button>().onClick.AddListener(() =>
@@ -244,17 +246,15 @@ namespace iiMenu.Menu
         /// <summary>The prefab canvas' own raycaster.</summary>
         public static GraphicRaycaster prefabRaycaster;
 
-        private static readonly List<KeyCode> controlFieldKeys = new List<KeyCode>
+        /// <summary>Whether onTextInput has been hooked up already.</summary>
+        private static void RemoveTextInputHook()
         {
-            KeyCode.A, KeyCode.B, KeyCode.C, KeyCode.D, KeyCode.E, KeyCode.F, KeyCode.G,
-            KeyCode.H, KeyCode.I, KeyCode.J, KeyCode.K, KeyCode.L, KeyCode.M, KeyCode.N,
-            KeyCode.O, KeyCode.P, KeyCode.Q, KeyCode.R, KeyCode.S, KeyCode.T, KeyCode.U,
-            KeyCode.V, KeyCode.W, KeyCode.X, KeyCode.Y, KeyCode.Z,
-            KeyCode.Alpha0, KeyCode.Alpha1, KeyCode.Alpha2, KeyCode.Alpha3, KeyCode.Alpha4,
-            KeyCode.Alpha5, KeyCode.Alpha6, KeyCode.Alpha7, KeyCode.Alpha8, KeyCode.Alpha9,
-            KeyCode.Space, KeyCode.Minus, KeyCode.Period, KeyCode.Comma, KeyCode.Slash,
-            KeyCode.Semicolon, KeyCode.Quote
-        };
+            if (hookedKeyboard == null)
+                return;
+
+            hookedKeyboard.onTextInput -= OnControlFieldChar;
+            hookedKeyboard = null;
+        }
 
         /// <summary>
         /// Gives a ControlUI field focus from the menu's own click handling. The scene's
@@ -269,12 +269,13 @@ namespace iiMenu.Menu
             focusedControlField = field;
             field.ActivateInputField();
             field.caretPosition = field.text != null ? field.text.Length : 0;
-
-            LogManager.Log($"[InputDiag] focused ControlUI field {field.name}, text=\"{field.text}\"");
         }
 
-        private static void WatchControlField(TMP_InputField field)
+        private static void WatchControlField(TMP_InputField field, bool numeric)
         {
+            if (numeric)
+                numericControlFields.Add(field);
+
             field.onSelect.AddListener(_ => focusedControlField = field);
             field.onDeselect.AddListener(_ =>
             {
@@ -283,10 +284,142 @@ namespace iiMenu.Menu
             });
         }
 
+        private static Keyboard hookedKeyboard;
+
+        private static void HookTextInput()
+        {
+            Keyboard keyboard = Keyboard.current;
+
+            if (keyboard == null || hookedKeyboard == keyboard)
+                return;
+
+            if (hookedKeyboard != null)
+                hookedKeyboard.onTextInput -= OnControlFieldChar;
+
+            hookedKeyboard = keyboard;
+            hookedKeyboard.onTextInput += OnControlFieldChar;
+        }
+
+        private static readonly HashSet<TMP_InputField> numericControlFields = new HashSet<TMP_InputField>();
+
+        private static bool IsNumeric(TMP_InputField field) => numericControlFields.Contains(field);
+
         /// <summary>
-        /// Edits the focused ControlUI field straight from the keyboard. This deliberately
-        /// does not go through the prompt keyboard, which is a separate buffer and is only
-        /// active while a prompt is open.
+        /// Caret and selection are tracked here rather than through TMP_InputField, because
+        /// hasSelection and SelectAll are not public on it.
+        /// </summary>
+        private static int caretIndex;
+        private static int selectionAnchor = -1;
+
+        private static bool HasSelection() => selectionAnchor >= 0;
+
+        private static int SelectionStart() => Mathf.Min(caretIndex, selectionAnchor);
+
+        private static int SelectionEnd() => Mathf.Max(caretIndex, selectionAnchor);
+
+        private static void ClearSelection() => selectionAnchor = -1;
+
+        /// <summary>
+        /// Writes a value back and parks the caret. The numeric fields are held to digits
+        /// only, three characters at most, and clamped to 255.
+        /// </summary>
+        private static void ApplyValue(TMP_InputField field, string value, int caret)
+        {
+            if (IsNumeric(field))
+            {
+                if (value.Length > 3)
+                    return;
+
+                if (value.Length > 0 && int.TryParse(value, out int number) && number > 255)
+                    value = "255";
+            }
+
+            field.text = value;
+
+            caretIndex = Mathf.Clamp(caret, 0, value.Length);
+            field.caretPosition = caretIndex;
+            ClearSelection();
+        }
+
+        private static void DeleteSelection(TMP_InputField field)
+        {
+            if (!HasSelection())
+                return;
+
+            string value = field.text ?? "";
+            int start = SelectionStart();
+
+            ApplyValue(field, value.Substring(0, start) + value.Substring(SelectionEnd()), start);
+        }
+
+        private static void CopySelection(TMP_InputField field)
+        {
+            if (!HasSelection())
+                return;
+
+            string value = field.text ?? "";
+            GUIUtility.systemCopyBuffer = value.Substring(SelectionStart(), SelectionEnd() - SelectionStart());
+        }
+
+        private static void SelectAll(TMP_InputField field)
+        {
+            string value = field.text ?? "";
+            selectionAnchor = 0;
+            caretIndex = value.Length;
+            field.caretPosition = caretIndex;
+        }
+
+        private static void MoveCaret(TMP_InputField field, int direction, bool extend)
+        {
+            string value = field.text ?? "";
+
+            if (extend)
+            {
+                if (!HasSelection())
+                    selectionAnchor = Mathf.Clamp(caretIndex, 0, value.Length);
+            }
+            else
+            {
+                ClearSelection();
+            }
+
+            caretIndex = Mathf.Clamp(caretIndex + direction, 0, value.Length);
+            field.caretPosition = caretIndex;
+        }
+
+        /// <summary>
+        /// Receives composed characters from the input system, which is what makes capitals
+        /// and symbols work: the character arrives already shifted, so nothing has to guess
+        /// at modifier state.
+        /// </summary>
+        private static void OnControlFieldChar(char character)
+        {
+            TMP_InputField field = focusedControlField;
+
+            if (field == null || inTextInput || Instance == null || !Instance.isOpen)
+                return;
+
+            string text = character.ToString();
+
+            if (IsNumeric(field))
+            {
+                if (!char.IsDigit(character))
+                    return;
+
+                text = character.ToString();
+            }
+
+            string value = field.text ?? "";
+            int start = HasSelection() ? SelectionStart() : Mathf.Clamp(caretIndex, 0, value.Length);
+            int end = HasSelection() ? SelectionEnd() : start;
+
+            ApplyValue(field, value.Substring(0, start) + text + value.Substring(end), start + text.Length);
+        }
+
+        /// <summary>
+        /// Handles the editing keys for the focused ControlUI field: the control shortcuts,
+        /// backspace and delete, and caret movement. Typed characters arrive separately
+        /// through onTextInput.
         /// </summary>
         private static void UpdateControlField()
         {
@@ -295,49 +428,117 @@ namespace iiMenu.Menu
             if (field == null || inTextInput || Instance == null || !Instance.isOpen)
                 return;
 
-            bool shift = UnityInput.Current.GetKey(KeyCode.LeftShift) || UnityInput.Current.GetKey(KeyCode.RightShift);
+            HookTextInput();
 
-            if (UnityInput.Current.GetKeyDown(KeyCode.Backspace))
+            Keyboard keyboard = Keyboard.current;
+
+            if (keyboard == null)
+                return;
+
+            bool control = keyboard.leftCtrlKey.isPressed || keyboard.rightCtrlKey.isPressed;
+            bool shift = keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed;
+
+            if (control)
             {
-                if (field.text.Length > 0)
+                if (keyboard.aKey.wasPressedThisFrame)
                 {
-                    field.text = field.text[..^1];
-                    field.caretPosition = field.text.Length;
+                    SelectAll(field);
+                    return;
                 }
+
+                if (keyboard.cKey.wasPressedThisFrame)
+                {
+                    CopySelection(field);
+                    return;
+                }
+
+                if (keyboard.xKey.wasPressedThisFrame)
+                {
+                    CopySelection(field);
+                    DeleteSelection(field);
+                    return;
+                }
+
+                if (keyboard.vKey.wasPressedThisFrame)
+                {
+                    string clipboard = GUIUtility.systemCopyBuffer;
+
+                    if (!string.IsNullOrEmpty(clipboard))
+                    {
+                        if (IsNumeric(field))
+                            clipboard = new string(clipboard.Where(char.IsDigit).ToArray());
+
+                        if (clipboard.Length > 0)
+                        {
+                            string value = field.text ?? "";
+                            int start = HasSelection() ? SelectionStart() : Mathf.Clamp(caretIndex, 0, value.Length);
+                            int end = HasSelection() ? SelectionEnd() : start;
+
+                            ApplyValue(field, value.Substring(0, start) + clipboard + value.Substring(end), start + clipboard.Length);
+                        }
+                    }
+
+                    return;
+                }
+
+                // Leave the remaining control combinations to whatever else wants them.
+                return;
+            }
+
+            if (keyboard.backspaceKey.wasPressedThisFrame)
+            {
+                if (HasSelection())
+                {
+                    DeleteSelection(field);
+                    return;
+                }
+
+                string value = field.text ?? "";
+                int caret = Mathf.Clamp(field.caretPosition, 0, value.Length);
+
+                if (caret > 0)
+                    ApplyValue(field, value.Remove(caret - 1, 1), caret - 1);
 
                 return;
             }
 
-            foreach (KeyCode key in controlFieldKeys)
+            if (keyboard.deleteKey.wasPressedThisFrame)
             {
-                if (!UnityInput.Current.GetKeyDown(key))
-                    continue;
-
-                if (key == KeyCode.Space)
-                    field.text += " ";
-                else if (key == KeyCode.Minus)
-                    field.text += shift ? "_" : "-";
-                else if (key == KeyCode.Period)
-                    field.text += shift ? ">" : ".";
-                else if (key == KeyCode.Comma)
-                    field.text += shift ? "<" : ",";
-                else if (key == KeyCode.Slash)
-                    field.text += shift ? "?" : "/";
-                else if (key == KeyCode.Semicolon)
-                    field.text += shift ? ":" : ";";
-                else if (key == KeyCode.Quote)
-                    field.text += shift ? "\"" : "'";
-                else
+                if (HasSelection())
                 {
-                    string name = key.ToString();
-                    string character = name.StartsWith("Alpha") ? name[5..] : name.ToLower();
-                    field.text += shift ? character.ToUpper() : character;
+                    DeleteSelection(field);
+                    return;
                 }
 
-                field.caretPosition = field.text.Length;
-                LogManager.Log($"[InputDiag] ControlUI field {field.name} now \"{field.text}\"");
-                break;
+                string value = field.text ?? "";
+                int caret = Mathf.Clamp(field.caretPosition, 0, value.Length);
+
+                if (caret < value.Length)
+                    ApplyValue(field, value.Remove(caret, 1), caret);
+
+                return;
             }
+
+            if (keyboard.leftArrowKey.wasPressedThisFrame)
+            {
+                MoveCaret(field, -1, shift);
+                return;
+            }
+
+            if (keyboard.rightArrowKey.wasPressedThisFrame)
+            {
+                MoveCaret(field, 1, shift);
+                return;
+            }
+
+            if (keyboard.homeKey.wasPressedThisFrame)
+            {
+                field.MoveTextStart(shift);
+                return;
+            }
+
+            if (keyboard.endKey.wasPressedThisFrame)
+                field.MoveTextEnd(shift);
         }
 
         private void LateUpdate()
