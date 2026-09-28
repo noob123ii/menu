@@ -163,7 +163,15 @@ namespace iiMenu
             DontDestroyOnLoad(Loader);
 
             if (CoroutineManager.instance != null)
+            {
                 CoroutineManager.instance.StartCoroutine(iiMenu.Mods.Important.MapStateReport());
+
+                // The loading screen plays itself once shortly after boot. Every other
+                // trigger for it depends on input, and the game's input wrapper is VR
+                // backed, so with no VR runtime nothing in the menu can be operated at all
+                // and the feature would otherwise be unreachable.
+                CoroutineManager.instance.StartCoroutine(Managers.LoadingScreenManager.PlayOnStartup());
+            }
         }
 
         // For SharpMonoInjector usage

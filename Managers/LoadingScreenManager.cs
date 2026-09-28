@@ -73,13 +73,50 @@ namespace iiMenu.Managers
             "Ready"
         };
 
+        /// <summary>Seconds to wait after boot before playing the loading screen once.</summary>
+        public static float StartupDelay = 4f;
+
+        /// <summary>Whether the loading screen plays once automatically after boot.</summary>
+        public static bool PlayOnceOnStartup = true;
+
+        /// <summary>
+        /// Plays the loading screen once after a short delay, so it is reachable without
+        /// any input at all.
+        /// </summary>
+        public static System.Collections.IEnumerator PlayOnStartup()
+        {
+            if (!PlayOnceOnStartup)
+                yield break;
+
+            float until = Time.time + StartupDelay;
+
+            while (Time.time < until)
+                yield return null;
+
+            // The menu is built from a patch that runs later, so wait for it rather than
+            // assuming it already exists.
+            int waited = 0;
+
+            while (Main.menu == null && waited < 600)
+            {
+                waited++;
+                yield return null;
+            }
+
+            LogManager.Log("Loading screen: startup autoplay firing.");
+            Show();
+        }
+
         /// <summary>
         /// How far toward the viewer a fill sits from the face of its button. The menu puts
-        /// its button text on a shallower z slope than the buttons themselves, so this is
+        /// its button text on a shallower z-slope than the buttons themselves, so this is
         /// kept deliberately tiny: enough to win the depth test against the button it sits
         /// on, small enough not to creep in front of the label.
         /// </summary>
         private const float FillDepth = 0.004f;
+
+        /// <summary>Metres in front of each camera that the fullscreen cover sits.</summary>
+        public static float CoverDistance = 0.55f;
 
         private static readonly List<Material> materials = new List<Material>();
 
@@ -118,6 +155,8 @@ namespace iiMenu.Managers
             // valid index, so the new category is appended before the index is set.
             Buttons.CurrentCategoryIndex = Buttons.GetCategory(CategoryName);
             Main.ReloadMenu();
+
+            CreateCovers();
 
             if (!AttachToButtons())
             {
@@ -164,6 +203,14 @@ namespace iiMenu.Managers
             }
 
             materials.Clear();
+
+            foreach (GameObject cover in covers)
+            {
+                if (cover != null)
+                    Object.Destroy(cover);
+            }
+
+            covers.Clear();
 
             if (runner != null)
             {
@@ -212,6 +259,86 @@ namespace iiMenu.Managers
                 completed = true;
 
             Render();
+        }
+
+        private static readonly List<GameObject> covers = new List<GameObject>();
+
+        /// <summary>
+        /// Drops a black plane in front of every camera that is actually rendering, sized
+        /// from that camera's own frustum, so the menu is not floating over the game world.
+        /// A plain cube on its default material is used rather than a canvas, because
+        /// cubes are known to render here where hand built world space UI did not.
+        /// </summary>
+        private static void CreateCovers()
+        {
+            foreach (GameObject cover in covers)
+            {
+                if (cover != null)
+                    Object.Destroy(cover);
+            }
+
+            covers.Clear();
+
+            foreach (Camera camera in CoverCameras())
+            {
+                float visibleHeight = 2f * CoverDistance * Mathf.Tan(camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
+                float visibleWidth = visibleHeight * Mathf.Max(camera.aspect, 0.1f);
+
+                GameObject cover = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                Object.Destroy(cover.GetComponent<Collider>());
+
+                cover.name = "LoadingCover";
+                cover.transform.SetParent(camera.transform, false);
+                cover.transform.localPosition = new Vector3(0f, 0f, CoverDistance);
+                cover.transform.localRotation = Quaternion.identity;
+
+                // Ten percent over the frustum so the edges cannot show the game behind.
+                cover.transform.localScale = new Vector3(visibleWidth * 1.1f, visibleHeight * 1.1f, 0.02f);
+
+                Material material = cover.GetComponent<Renderer>().material;
+                material.color = Color.black;
+                materials.Add(material);
+
+                covers.Add(cover);
+            }
+
+            LogManager.Log($"Loading screen: fullscreen cover on {covers.Count} camera(s).");
+        }
+
+        private static IEnumerable<Camera> CoverCameras()
+        {
+            List<Camera> found = new List<Camera>();
+
+            Camera firstPerson = null;
+
+            try
+            {
+                if (GorillaTagger.Instance != null && GorillaTagger.Instance.mainCamera != null)
+                    firstPerson = GorillaTagger.Instance.mainCamera.GetComponent<Camera>();
+            }
+            catch { }
+
+            AddIfUsable(found, firstPerson);
+            AddIfUsable(found, TPC);
+
+            if (found.Count == 0)
+            {
+                try { AddIfUsable(found, Camera.main); }
+                catch { }
+            }
+
+            return found;
+        }
+
+        private static void AddIfUsable(List<Camera> found, Camera camera)
+        {
+            if (camera == null || found.Contains(camera))
+                return;
+
+            if (!camera.isActiveAndEnabled)
+                return;
+
+            found.Add(camera);
         }
 
         /// <summary>
