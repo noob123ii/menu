@@ -1088,13 +1088,6 @@ namespace iiMenu.Managers
             LogManager.Log($"SceneUnloaded: {scene.name}");
         }
 
-        private void RestoreOriginalBoardScreens()
-        {
-            Renderer renderer = computerMonitor?.GetComponent<Renderer>();
-            if (renderer != null && originalComputerMonitorMaterial != null)
-                renderer.material = originalComputerMonitorMaterial;
-        }
-
         #region Object Boards
         public readonly Dictionary<string, GameObject> objectBoards = new Dictionary<string, GameObject>();
         public List<GorillaNetworkJoinTrigger> triggers = new List<GorillaNetworkJoinTrigger>();
