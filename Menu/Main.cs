@@ -1613,17 +1613,6 @@ namespace iiMenu.Menu
             KeyCode.Space, KeyCode.Backspace, KeyCode.Return, KeyCode.Escape
         };
 
-        private static float nextInputDiagTime;
-
-        /// <summary>Whatever the on screen field is currently showing, for diagnostics.</summary>
-        private static string FieldText() => Settings.DiagnosticFieldText();
-
-        private static string InputBackend()
-        {
-            try { return UnityInput.Current?.GetType().Name ?? "null"; }
-            catch (System.Exception exception) { return "threw:" + exception.GetType().Name; }
-        }
-
         private static void UpdateKeyboard()
         {
             if (VRKeyboard != null)
@@ -1636,15 +1625,7 @@ namespace iiMenu.Menu
             }
 
             if (!inTextInput || !isKeyboardPc)
-            {
-                if (inTextInput && Time.time > nextInputDiagTime)
-                {
-                    nextInputDiagTime = Time.time + 2f;
-                    LogManager.Log($"[InputDiag] typing blocked at the gate: inTextInput={inTextInput} isKeyboardPc={isKeyboardPc} isOnPC={isOnPC} backend={InputBackend()}");
-                }
-
                 return;
-            }
             List<KeyCode> keysPressed = new List<KeyCode>();
             foreach (KeyCode keyCode in detectedKeyCodes)
             {
@@ -1761,8 +1742,6 @@ namespace iiMenu.Menu
                     if (pcKeyboardSounds)
                         VRRig.LocalRig.PlayHandTapLocal(66, false, buttonClickVolume / 10f);
                     pageNumber = 0;
-
-                    LogManager.Log($"[InputDiag] key={keyCode} input=\"{keyboardInput}\" isSearching={isSearching} catIdx={Buttons.CurrentCategoryIndex} clickGUI={clickGUI} willRun={(clickGUI ? "UpdateSearch" : "ReloadMenu")} fieldText=\"{FieldText()}\"");
 
                     if (!clickGUI)
                         ReloadMenu();

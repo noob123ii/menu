@@ -41,8 +41,6 @@ namespace iiMenu.Menu
 
             uiPrefab = LoadObject<GameObject>("UI");
 
-            DiagnoseEventSystem();
-
             Transform canvas = uiPrefab.transform.Find("Canvas");
             prefabCanvas = canvas.GetComponent<Canvas>();
             prefabRaycaster = canvas.GetComponent<GraphicRaycaster>();
@@ -63,11 +61,8 @@ namespace iiMenu.Menu
             b = canvas.Find("ControlUI/B").GetComponent<TMP_InputField>();
             textInput = canvas.Find("ControlUI/TextInput").GetComponent<TMP_InputField>();
 
-            // These four fields only ever had their button listeners wired up. Typing into
-            // them relies on Unity's own UI input module, which the menu never adds, and the
-            // scene's EventSystem has none that delivers text, so a field could be
-            // clicked and focused but never receive a character. Track which one has
-            // focus and edit it directly from the keyboard instead.
+            // The scene EventSystem is XR driven and does not deliver text, so these
+            // fields are edited directly rather than through a TMP_InputField input module.
             WatchControlField(r, true);
             WatchControlField(g, true);
             WatchControlField(b, true);
@@ -202,51 +197,16 @@ namespace iiMenu.Menu
         private TMP_InputField b;
         private TMP_InputField textInput;
 
-        /// <summary>
-        /// Reports what the scene's EventSystem actually is. A TMP_InputField only receives
-        /// typed characters through an input module that feeds it text, and a VR oriented
-        /// one never will, so this needs to be known rather than assumed.
-        /// </summary>
-        private static void DiagnoseEventSystem()
-        {
-            try
-            {
-                var eventSystem = UnityEngine.EventSystems.EventSystem.current;
-                if (eventSystem == null)
-                {
-                    LogManager.Log("[InputDiag] EventSystem: NONE in scene");
-                    return;
-                }
-
-                List<string> parts = new List<string>();
-                foreach (var component in eventSystem.GetComponents<Component>())
-                    parts.Add(component == null ? "null" : component.GetType().Name);
-
-                LogManager.Log($"[InputDiag] EventSystem: {eventSystem.GetType().Name} components=[{string.Join(", ", parts)}]");
-
-                foreach (var found in eventSystem.GetComponents<UnityEngine.EventSystems.BaseInputModule>())
-                    LogManager.Log($"[InputDiag]   input module: {found.GetType().FullName} enabled={found.enabled} active={found.gameObject.activeInHierarchy}");
-            }
-            catch (System.Exception exception)
-            {
-                LogManager.Log($"[InputDiag] EventSystem probe threw: {exception.GetType().Name}: {exception.Message}");
-            }
-        }
-
         /// <summary>Which ControlUI field currently has focus, if any.</summary>
         private static TMP_InputField focusedControlField;
 
-        /// <summary>
-        /// The prefab canvas, exposed so the click handling can raycast it. ControlUI lives
-        /// on this canvas rather than on the menu canvas, so without this the name and
-        /// colour fields are never pointed at.
-        /// </summary>
+        /// <summary>Prefab canvas, raycast separately from the menu canvas.</summary>
         public static Canvas prefabCanvas;
 
         /// <summary>The prefab canvas' own raycaster.</summary>
         public static GraphicRaycaster prefabRaycaster;
 
-        /// <summary>Whether onTextInput has been hooked up already.</summary>
+        /// <summary>Drops the keyboard hook.</summary>
         private static void RemoveTextInputHook()
         {
             if (hookedKeyboard == null)
@@ -256,11 +216,7 @@ namespace iiMenu.Menu
             hookedKeyboard = null;
         }
 
-        /// <summary>
-        /// Gives a ControlUI field focus from the menu's own click handling. The scene's
-        /// EventSystem is VR oriented and never sends select, so this is what actually makes
-        /// the field editable.
-        /// </summary>
+        /// <summary>Focuses a field, since the XR input module never sends select.</summary>
         public static void FocusControlField(TMP_InputField field)
         {
             if (focusedControlField == field)
@@ -304,10 +260,7 @@ namespace iiMenu.Menu
 
         private static bool IsNumeric(TMP_InputField field) => numericControlFields.Contains(field);
 
-        /// <summary>
-        /// Caret and selection are tracked here rather than through TMP_InputField, because
-        /// hasSelection and SelectAll are not public on it.
-        /// </summary>
+        /// <summary>Selection state, tracked here as TMP_InputField does not expose it.</summary>
         private static int caretIndex;
         private static int selectionAnchor = -1;
 
@@ -319,10 +272,7 @@ namespace iiMenu.Menu
 
         private static void ClearSelection() => selectionAnchor = -1;
 
-        /// <summary>
-        /// Writes a value back and parks the caret. The numeric fields are held to digits
-        /// only, three characters at most, and clamped to 255.
-        /// </summary>
+        /// <summary>Applies a value, enforcing the numeric field limits.</summary>
         private static void ApplyValue(TMP_InputField field, string value, int caret)
         {
             if (IsNumeric(field))
@@ -387,11 +337,7 @@ namespace iiMenu.Menu
             field.caretPosition = caretIndex;
         }
 
-        /// <summary>
-        /// Receives composed characters from the input system, which is what makes capitals
-        /// and symbols work: the character arrives already shifted, so nothing has to guess
-        /// at modifier state.
-        /// </summary>
+        /// <summary>Inserts a typed character, already shifted by the input system.</summary>
         private static void OnControlFieldChar(char character)
         {
             TMP_InputField field = focusedControlField;
@@ -416,11 +362,7 @@ namespace iiMenu.Menu
             ApplyValue(field, value.Substring(0, start) + text + value.Substring(end), start + text.Length);
         }
 
-        /// <summary>
-        /// Handles the editing keys for the focused ControlUI field: the control shortcuts,
-        /// backspace and delete, and caret movement. Typed characters arrive separately
-        /// through onTextInput.
-        /// </summary>
+        /// <summary>Control shortcuts, deletion and caret movement for the focused field.</summary>
         private static void UpdateControlField()
         {
             TMP_InputField field = focusedControlField;
@@ -547,14 +489,8 @@ namespace iiMenu.Menu
         }
 
         /// <summary>
-        /// Handles clicking the ControlUI fields without going through the EventSystem.
-        ///
-        /// The scene runs XRUIInputModule alongside two InputSystemUIInputModules, all
-        /// enabled, and the XR one wins. Buttons still fire, because a click only needs a
-        /// pointer event, but nothing ever delivers text to a TMP_InputField, so the name
-        /// and R/G/B fields could be pressed and never edited. Rather than fight three
-        /// competing modules, this raycasts the prefab's own GraphicRaycaster directly,
-        /// which is known to work, and focuses the field itself.
+        /// Focuses a ControlUI field on click. Raycasts the prefab canvas directly because
+        /// the XR input module handles pointer events but not text.
         /// </summary>
         private static void UpdateControlUiPointer()
         {
@@ -576,8 +512,7 @@ namespace iiMenu.Menu
 
                 for (int i = 0; i < controlHits.Count; i++)
                 {
-                    // The ray normally lands on a child of the field, such as its text
-                    // area, so the component has to be looked up through the parents too.
+                    // The ray lands on a child of the field, such as its text area.
                     TMP_InputField field = controlHits[i].gameObject.GetComponent<TMP_InputField>()
                         ?? controlHits[i].gameObject.GetComponentInParent<TMP_InputField>();
 
@@ -590,7 +525,7 @@ namespace iiMenu.Menu
             }
             catch (System.Exception exception)
             {
-                LogManager.Log($"[InputDiag] ControlUI pointer threw: {exception.GetType().Name}: {exception.Message}");
+                LogManager.LogError($"Control UI pointer handling failed: {exception.Message}");
             }
         }
 

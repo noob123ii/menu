@@ -65,8 +65,6 @@ namespace iiMenu.Mods
             inTextInput = true;
             keyboardInput = "";
 
-            LogManager.Log($"[InputDiag] SpawnKeyboard: vrActive={XRSettings.isDeviceActive} isKeyboardPc={isKeyboardPc} isOnPC={isOnPC} isSearching={isSearching} clickGUI={clickGUI} backend={(BepInEx.UnityInput.Current != null ? BepInEx.UnityInput.Current.GetType().Name : "null")}");
-
             shift = false;
             lockShift = false;
 
@@ -5979,25 +5977,6 @@ exit 0";
             Canvas.ForceUpdateCanvases();
         }
 
-        /// <summary>What the search field is currently showing, for diagnostics only.</summary>
-        public static string DiagnosticFieldText()
-        {
-            try
-            {
-                if (canvas == null) return "no-canvas";
-
-                Transform searchBar = canvas.transform.Find("Main/ModuleTab/Search");
-                if (searchBar == null) return "no-searchbar";
-
-                var field = searchBar.GetComponent<TMPro.TMP_InputField>();
-                return field == null ? "no-field" : field.text;
-            }
-            catch (System.Exception exception)
-            {
-                return "threw:" + exception.GetType().Name;
-            }
-        }
-
         public static void UpdateSearch()
         {
             Transform searchBar = canvas.transform.Find("Main/ModuleTab/Search");
@@ -6006,25 +5985,6 @@ exit 0";
             inputField.text = keyboardInput;
             foreach (GameObject button in canvas.transform.Find("Main/ModuleTab/Modules/Viewport/Content").Children())
                 button.SetActive(keyboardInput.IsNullOrEmpty() || button.name.ClearTags().Replace(" ", "").ToLower().Contains(keyboardInput.Replace(" ", "").ToLower()));
-        }
-
-        private static string currentPosMouse()
-        {
-            try { return Mouse.current != null ? $"{Mouse.current.position.ReadValue()}" : "no-mouse"; }
-            catch { return "threw"; }
-        }
-
-        private static string RaycastNames(int fromIndex)
-        {
-            try
-            {
-                if (uiResults.Count <= fromIndex) return "none";
-                List<string> names = new List<string>();
-                for (int i = fromIndex; i < uiResults.Count && names.Count < 6; i++)
-                    names.Add(uiResults[i].gameObject.name);
-                return string.Join(",", names);
-            }
-            catch { return "threw"; }
         }
 
         public static void ClickGUI()
@@ -6090,20 +6050,10 @@ exit 0";
                     uiResults.Clear();
                     uiRaycaster.Raycast(pointerData, uiResults);
 
-                    // ControlUI (the name field and the R/G/B fields) lives on the UI
-                    // prefab's own canvas, not the menu canvas, so it was never pointed at
-                    // and could not be clicked. Raycast that canvas as well.
-                    int menuHits = uiResults.Count;
-
+                    // ControlUI is on the prefab canvas, not the menu canvas, so it needs
+                    // raycasting separately.
                     if (UI.prefabRaycaster != null)
-                    {
                         UI.prefabRaycaster.Raycast(pointerData, uiResults);
-                        LogManager.Log($"[InputDiag] raycast at {currentPosMouse()} menuHits={menuHits} prefabHits={uiResults.Count - menuHits} names={RaycastNames(menuHits)}");
-                    }
-                    else
-                    {
-                        LogManager.Log($"[InputDiag] raycast at {currentPosMouse()} menuHits={menuHits} prefabRaycaster=NULL");
-                    }
 
                     currentUI = uiResults.Count > 0 ? uiResults[0].gameObject : null;
 

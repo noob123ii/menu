@@ -33,10 +33,8 @@ namespace iiMenu.Classes.Menu
         public bool detected;
 
         /// <summary>
-        /// Set on buttons that only stand in for something else, such as the Category
-        /// Settings entries that toggle whether a category is visible. Those are enabled
-        /// by default and borrow the real category's name as their overlap text, so without
-        /// this they get listed as if they were enabled mods.
+        /// Set on placeholder buttons, such as the Category Settings entries, so they are
+        /// not listed as enabled mods.
         /// </summary>
         public bool hideFromArraylist;
 

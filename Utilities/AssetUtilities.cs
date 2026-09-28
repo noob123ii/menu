@@ -57,16 +57,9 @@ namespace iiMenu.Utilities
         private static readonly Dictionary<string, List<System.Action<AudioClip>>> soundWaiters = new Dictionary<string, List<System.Action<AudioClip>>>();
 
         /// <summary>
-        /// Loads a clip off disk, decoding it without blocking the caller.
-        ///
-        /// The decode used to be done by spinning on 'while (!newvar.isDone) { }'. That
-        /// froze the main thread for the whole decode and was a deadlock hazard too, since
-        /// Unity pumps UnityWebRequestAsyncOperation on the very thread that has to advance
-        /// it. It runs as a coroutine now, which means the clip does not exist yet when
-        /// this returns and the first call hands back null. That is fine for the menu's
-        /// own click sounds, but for a sound the player explicitly asked to hear, a null
-        /// return meant the click was silently dropped. Callers that need the clip now
-        /// pass onLoaded and get called back with it once the decode finishes.
+        /// Loads a clip off disk without blocking the caller. Decoding runs as a coroutine,
+        /// so the first call returns null and the clip only exists a moment later. Callers
+        /// that need the clip immediately pass onLoaded to be called back with it.
         /// </summary>
         public static AudioClip LoadSoundFromFile(string fileName, System.Action<AudioClip> onLoaded = null) // Thanks to ShibaGT for help with loading the audio from file
         {
@@ -91,8 +84,7 @@ namespace iiMenu.Utilities
 
             if (CoroutineManager.instance == null)
             {
-                // Nothing will ever advance the decode, so release the waiters rather than
-                // leaving them hanging on a clip that is never coming.
+                // Without a coroutine runner the decode never completes.
                 lock (soundsLoading)
                     soundsLoading.Remove(fileName);
 

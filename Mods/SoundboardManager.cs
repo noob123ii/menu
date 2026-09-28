@@ -148,9 +148,8 @@ namespace iiMenu.Mods
 
             if (File.Exists(abs))
             {
-                // Already on disk. The decode runs as a coroutine, so the clip is not
-                // available on the first call. Play it through the callback rather than
-                // reporting a failed download for a file that is sitting right there.
+                // On disk already, so no download. Decoding is async, so play from the
+                // callback instead of reporting a failure.
                 AssetUtilities.LoadSoundFromFile(rel, cached =>
                 {
                     if (cached != null)

@@ -71,10 +71,8 @@ namespace iiMenu
             instance = this;
             Application.quitting += OnApplicationQuitting;
 
-            // A single unambiguous line saying this exact build is the one running, plus
-            // whether a VR runtime came up. Everything in this menu is driven through the
-            // game's VR backed input wrapper, so when VR is missing nothing is operable,
-            // and that is worth knowing from the log rather than guessing.
+            // Identifies the running build and whether an XR runtime came up. Menu input
+            // is VR backed, so this is worth having in the log.
             LogManager.Log($"[Startup] ii Reborn build {PluginInfo.Version} active. " +
                            $"vrActive={SystemInfoVR()}");
 

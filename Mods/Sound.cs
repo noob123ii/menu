@@ -107,13 +107,8 @@ namespace iiMenu.Mods
                 NotificationManager.SendNotification($"<color=grey>[</color><color=red>WARNING</color><color=grey>]</color> You are using the legacy microphone system. Modern soundboard features will not be implemented.");
             foreach (string file in files)
             {
-                // These used to be hardcoded character offsets into the full path, sized
-                // for the old "iisStupidMenu" base directory. BaseDirectory is "iiReborn"
-                // now, five characters shorter, so the offsets cut into the filename: the
-                // name lost its first five characters, and the path handed to the loader
-                // came out as "ds/song.mp3" instead of "Sounds/song.mp3". The file was
-                // then never found, the clip was always null, and every sound was silent
-                // no matter what format it was saved as. Derive both from the path.
+                // Derived from the path rather than sliced at a fixed offset, which broke
+                // when the base directory was renamed and shortened.
                 string soundName = RemoveFileExtension(Path.GetFileName(file)).Replace("_", " ");
                 string relativePath = $"Sounds{Subdirectory}/{Path.GetFileName(file)}";
 
@@ -420,10 +415,8 @@ namespace iiMenu.Mods
             }
             else if (file is string filePath)
             {
-                // The decode runs as a coroutine, so on the first click there is no clip to
-                // play yet. Play it through the callback rather than dropping the click,
-                // which is what left the button reporting itself as enabled with nothing
-                // coming out of the speakers.
+                // Decoding is async, so the first click has no clip yet. Play it from the
+                // callback rather than dropping the click.
                 LoadSoundFromFile(filePath, loaded =>
                 {
                     if (loaded != null && shouldPlay)
@@ -489,8 +482,7 @@ namespace iiMenu.Mods
         }
         public static void PlayAudio(string file)
         {
-            // Same as the soundboard: the first click only kicks off the decode, so play
-            // the clip through the callback instead of losing the click.
+            // Decoding is async, so the first call has no clip yet.
             LoadSoundFromFile(file, sound =>
             {
                 if (sound != null)
