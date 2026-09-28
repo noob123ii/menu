@@ -107,8 +107,15 @@ namespace iiMenu.Mods
                 NotificationManager.SendNotification($"<color=grey>[</color><color=red>WARNING</color><color=grey>]</color> You are using the legacy microphone system. Modern soundboard features will not be implemented.");
             foreach (string file in files)
             {
-                string fileName = file.Replace("\\", "/")[(21 + Subdirectory.Length)..];
-                string soundName = RemoveFileExtension(fileName).Replace("_", " ");
+                // These used to be hardcoded character offsets into the full path, sized
+                // for the old "iisStupidMenu" base directory. BaseDirectory is "iiReborn"
+                // now, five characters shorter, so the offsets cut into the filename: the
+                // name lost its first five characters, and the path handed to the loader
+                // came out as "ds/song.mp3" instead of "Sounds/song.mp3". The file was
+                // then never found, the clip was always null, and every sound was silent
+                // no matter what format it was saved as. Derive both from the path.
+                string soundName = RemoveFileExtension(Path.GetFileName(file)).Replace("_", " ");
+                string relativePath = $"Sounds{Subdirectory}/{Path.GetFileName(file)}";
 
                 if (RecorderPatch.enabled)
                 {
@@ -116,16 +123,16 @@ namespace iiMenu.Mods
                     {
                         buttonText = "SoundboardSound" + soundName.Hash(),
                         overlapText = soundName,
-                        toolTip = "Instantly plays \"" + RemoveFileExtension(fileName).Replace("_", " ") + "\" locally + through mic (dual volume in Soundboard Settings)."
+                        toolTip = "Instantly plays \"" + soundName + "\" locally + through mic (dual volume in Soundboard Settings)."
                     };
                     if (OverlapAudio)
                     {
-                        buttonInfo.method = () => PlayAudio(file[14..]);
+                        buttonInfo.method = () => PlayAudio(relativePath);
                         buttonInfo.isTogglable = false;
                     }
                     else
                     {
-                        buttonInfo.method = () => PlaySoundboardSound(file[14..], buttonInfo, LoopAudio, BindMode > 0);
+                        buttonInfo.method = () => PlaySoundboardSound(relativePath, buttonInfo, LoopAudio, BindMode > 0);
                         buttonInfo.disableMethod = () => StopSoundboardSound(buttonInfo);
                     }
 
@@ -135,7 +142,7 @@ namespace iiMenu.Mods
                     if (BindMode > 0)
                     {
                         bool enabled = enabledSounds.Contains(soundName);
-                        soundButtons.Add(new ButtonInfo { buttonText = "SoundboardSound" + soundName.Hash(), overlapText = soundName, method = () => PrepareBindAudio(file[14..]), disableMethod = StopAllSounds, enabled = enabled, toolTip = "Plays \"" + RemoveFileExtension(fileName).Replace("_", " ") + "\" through your microphone." });
+                        soundButtons.Add(new ButtonInfo { buttonText = "SoundboardSound" + soundName.Hash(), overlapText = soundName, method = () => PrepareBindAudio(relativePath), disableMethod = StopAllSounds, enabled = enabled, toolTip = "Plays \"" + soundName + "\" through your microphone." });
 
                     }
                     else
@@ -143,10 +150,10 @@ namespace iiMenu.Mods
                         if (LoopAudio)
                         {
                             bool enabled = enabledSounds.Contains(soundName);
-                            soundButtons.Add(new ButtonInfo { buttonText = "SoundboardSound" + soundName.Hash(), overlapText = soundName, enableMethod = () => PlayAudio(file[14..]), disableMethod = StopAllSounds, enabled = enabled, toolTip = "Plays \"" + RemoveFileExtension(fileName).Replace("_", " ") + "\" through your microphone." });
+                            soundButtons.Add(new ButtonInfo { buttonText = "SoundboardSound" + soundName.Hash(), overlapText = soundName, enableMethod = () => PlayAudio(relativePath), disableMethod = StopAllSounds, enabled = enabled, toolTip = "Plays \"" + soundName + "\" through your microphone." });
                         }
                         else
-                            soundButtons.Add(new ButtonInfo { buttonText = "SoundboardSound" + soundName.Hash(), overlapText = RemoveFileExtension(fileName).Replace("_", " "), method = () => PlayAudio(file[14..]), isTogglable = false, toolTip = "Plays \"" + RemoveFileExtension(fileName).Replace("_", " ") + "\" through your microphone." });
+                            soundButtons.Add(new ButtonInfo { buttonText = "SoundboardSound" + soundName.Hash(), overlapText = soundName, method = () => PlayAudio(relativePath), isTogglable = false, toolTip = "Plays \"" + soundName + "\" through your microphone." });
                     }
                 }
 
@@ -385,48 +392,65 @@ namespace iiMenu.Mods
 
         public static void PlaySoundboardSound(object file, ButtonInfo info, bool loopAudio, bool bind)
         {
-            bool[] bindings = {
-                rightPrimary,
-                rightSecondary,
-                leftPrimary,
-                leftSecondary,
-                leftGrab,
-                rightGrab,
-                leftTrigger > 0.5f,
-                rightTrigger > 0.5f,
-                leftJoystickClick,
-                rightJoystickClick
-            };
-
-            AudioClip clip = null;
-            if (file is string filePath)
-                clip = LoadSoundFromFile(filePath);
-            else if (file is AudioClip audioClip)
-                clip = audioClip;
-
-            if (clip == null)
-                return;
-
             bool shouldPlay = true;
             if (bind && BindMode > 0)
             {
+                bool[] bindings = {
+                    rightPrimary,
+                    rightSecondary,
+                    leftPrimary,
+                    leftSecondary,
+                    leftGrab,
+                    rightGrab,
+                    leftTrigger > 0.5f,
+                    rightTrigger > 0.5f,
+                    leftJoystickClick,
+                    rightJoystickClick
+                };
+
                 bool bindPressed = bindings[BindMode - 1];
-                shouldPlay = bindPressed && !lastBindPressed; 
+                shouldPlay = bindPressed && !lastBindPressed;
                 lastBindPressed = bindPressed;
             }
 
-            if (shouldPlay && !activeSounds.ContainsKey(info))
+            if (file is AudioClip alreadyLoaded)
             {
-                if (RecorderPatch.enabled)
+                if (shouldPlay)
+                    StartSoundboardSound(alreadyLoaded, info, loopAudio);
+            }
+            else if (file is string filePath)
+            {
+                // The decode runs as a coroutine, so on the first click there is no clip to
+                // play yet. Play it through the callback rather than dropping the click,
+                // which is what left the button reporting itself as enabled with nothing
+                // coming out of the speakers.
+                LoadSoundFromFile(filePath, loaded =>
                 {
-                    SoundboardManager.ApplySettings();
-                    Guid id = SoundboardManager.InjectMic(clip, false, SoundboardManager.MicVolume);
-                    SoundboardManager.PlayLocalPreview(clip);
-                    if (id == Guid.Empty) id = Guid.NewGuid();
-                    activeSounds[info] = (id, clip);
-                }
+                    if (loaded != null && shouldPlay)
+                        StartSoundboardSound(loaded, info, loopAudio);
+                });
             }
 
+            ReapFinishedSounds(loopAudio);
+        }
+
+        private static void StartSoundboardSound(AudioClip clip, ButtonInfo info, bool loopAudio)
+        {
+            if (clip == null || activeSounds.ContainsKey(info))
+                return;
+
+            if (RecorderPatch.enabled)
+            {
+                SoundboardManager.ApplySettings();
+                Guid id = SoundboardManager.InjectMic(clip, false, SoundboardManager.MicVolume);
+                SoundboardManager.PlayLocalPreview(clip);
+                if (id == Guid.Empty) id = Guid.NewGuid();
+                activeSounds[info] = (id, clip);
+            }
+        }
+
+        private static void ReapFinishedSounds(bool loopAudio)
+        {
             var ids = VoiceManager.Get().AudioClips.Select(c => c.Id).ToHashSet();
             var finished = activeSounds.Where(kvp => !ids.Contains(kvp.Value.id)).ToList();
 
@@ -465,9 +489,13 @@ namespace iiMenu.Mods
         }
         public static void PlayAudio(string file)
         {
-            AudioClip sound = LoadSoundFromFile(file);
-            if (sound == null) return;
-            PlayAudio(sound);
+            // Same as the soundboard: the first click only kicks off the decode, so play
+            // the clip through the callback instead of losing the click.
+            LoadSoundFromFile(file, sound =>
+            {
+                if (sound != null)
+                    PlayAudio(sound);
+            });
         }
 
         public static void StopAllSounds() // used to be FixMicrophone

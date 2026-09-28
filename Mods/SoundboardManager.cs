@@ -146,33 +146,43 @@ namespace iiMenu.Mods
             string abs = Path.Combine(FileUtilities.GetGamePath(), PluginInfo.BaseDirectory, rel);
             try { Directory.CreateDirectory(Path.GetDirectoryName(abs)); } catch { }
 
-            AudioClip clip = null;
             if (File.Exists(abs))
             {
-                clip = AssetUtilities.LoadSoundFromFile(rel);
-            }
-            else
-            {
-                using (var req = UnityWebRequestMultimedia.GetAudioClip(mp3Url, AudioType.MPEG))
+                // Already on disk. The decode runs as a coroutine, so the clip is not
+                // available on the first call. Play it through the callback rather than
+                // reporting a failed download for a file that is sitting right there.
+                AssetUtilities.LoadSoundFromFile(rel, cached =>
                 {
-                    try { req.SetRequestHeader("User-Agent", AssetUtilities.BrowserUserAgent); } catch { }
-                    yield return req.SendWebRequest();
-                    if (req.result == UnityWebRequest.Result.Success)
-                    {
-                        try
-                        {
-                            clip = DownloadHandlerAudioClip.GetContent(req);
-                            byte[] bytes = req.downloadHandler?.data;
-                            if (clip != null && bytes != null && bytes.Length > 1024)
-                                File.WriteAllBytes(abs, bytes);
-                        }
-                        catch { clip = null; }
-                    }
+                    if (cached != null)
+                        PlayHighQuality(cached, false);
+                    else
+                        NotificationManager.SendNotification("<color=grey>[</color><color=red>ERROR</color><color=grey>]</color> Could not play that sound.");
+                });
 
-                    if (clip == null)
-                        clip = AssetUtilities.LoadSoundFromURL(mp3Url, rel);
-                }
+                yield break;
             }
+
+            AudioClip clip = null;
+            using (var req = UnityWebRequestMultimedia.GetAudioClip(mp3Url, AudioType.MPEG))
+            {
+                try { req.SetRequestHeader("User-Agent", AssetUtilities.BrowserUserAgent); } catch { }
+                yield return req.SendWebRequest();
+                if (req.result == UnityWebRequest.Result.Success)
+                {
+                    try
+                    {
+                        clip = DownloadHandlerAudioClip.GetContent(req);
+                        byte[] bytes = req.downloadHandler?.data;
+                        if (clip != null && bytes != null && bytes.Length > 1024)
+                            File.WriteAllBytes(abs, bytes);
+                    }
+                    catch { clip = null; }
+                }
+
+                if (clip == null)
+                    clip = AssetUtilities.LoadSoundFromURL(mp3Url, rel);
+            }
+
             if (clip != null) PlayHighQuality(clip, false);
             else NotificationManager.SendNotification("<color=grey>[</color><color=red>ERROR</color><color=grey>]</color> Download failed.");
         }

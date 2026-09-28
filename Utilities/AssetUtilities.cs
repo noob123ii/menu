@@ -54,31 +54,84 @@ namespace iiMenu.Utilities
         public const string BrowserUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
         private static readonly HashSet<string> soundsLoading = new HashSet<string>();
+        private static readonly Dictionary<string, List<System.Action<AudioClip>>> soundWaiters = new Dictionary<string, List<System.Action<AudioClip>>>();
 
-        public static AudioClip LoadSoundFromFile(string fileName) // Thanks to ShibaGT for help with loading the audio from file
+        /// <summary>
+        /// Loads a clip off disk, decoding it without blocking the caller.
+        ///
+        /// The decode used to be done by spinning on 'while (!newvar.isDone) { }'. That
+        /// froze the main thread for the whole decode and was a deadlock hazard too, since
+        /// Unity pumps UnityWebRequestAsyncOperation on the very thread that has to advance
+        /// it. It runs as a coroutine now, which means the clip does not exist yet when
+        /// this returns and the first call hands back null. That is fine for the menu's
+        /// own click sounds, but for a sound the player explicitly asked to hear, a null
+        /// return meant the click was silently dropped. Callers that need the clip now
+        /// pass onLoaded and get called back with it once the decode finishes.
+        /// </summary>
+        public static AudioClip LoadSoundFromFile(string fileName, System.Action<AudioClip> onLoaded = null) // Thanks to ShibaGT for help with loading the audio from file
         {
             if (audioFilePool.TryGetValue(fileName, out var cached))
+            {
+                onLoaded?.Invoke(cached);
                 return cached;
+            }
 
-            // This used to spin on 'while (!newvar.isDone) { }', which froze the main
-            // thread for the whole decode. It was also a deadlock hazard: Unity pumps
-            // UnityWebRequestAsyncOperation on the main thread, so the thread being
-            // spun was the thread that had to advance the request. The load now runs as
-            // a coroutine and this returns null for the first call, which every caller
-            // already handles (LoadSoundFromURL returns null while downloading too).
             lock (soundsLoading)
             {
+                if (onLoaded != null)
+                {
+                    if (!soundWaiters.TryGetValue(fileName, out var waiting))
+                        soundWaiters[fileName] = waiting = new List<System.Action<AudioClip>>();
+                    waiting.Add(onLoaded);
+                }
+
                 if (!soundsLoading.Add(fileName))
                     return null;
             }
 
-            CoroutineManager.instance?.StartCoroutine(LoadSoundFromFileAsync(fileName));
+            if (CoroutineManager.instance == null)
+            {
+                // Nothing will ever advance the decode, so release the waiters rather than
+                // leaving them hanging on a clip that is never coming.
+                lock (soundsLoading)
+                    soundsLoading.Remove(fileName);
+
+                CompleteWaiters(fileName, null);
+                return null;
+            }
+
+            CoroutineManager.instance.StartCoroutine(LoadSoundFromFileAsync(fileName));
 
             return null;
         }
 
+        private static void CompleteWaiters(string fileName, AudioClip clip)
+        {
+            List<System.Action<AudioClip>> waiting = null;
+
+            lock (soundsLoading)
+            {
+                if (soundWaiters.TryGetValue(fileName, out waiting))
+                    soundWaiters.Remove(fileName);
+            }
+
+            if (waiting == null)
+                return;
+
+            foreach (System.Action<AudioClip> waiter in waiting)
+            {
+                try { waiter(clip); }
+                catch (System.Exception exception)
+                {
+                    LogManager.LogError($"Sound callback for {fileName} threw: {exception.Message}");
+                }
+            }
+        }
+
         private static System.Collections.IEnumerator LoadSoundFromFileAsync(string fileName)
         {
+            AudioClip loaded = null;
+
             try
             {
                 string filePath = $"{GetGamePath()}/{PluginInfo.BaseDirectory}/{fileName}";
@@ -97,7 +150,10 @@ namespace iiMenu.Utilities
                 }
 
                 if (request == null)
+                {
+                    LogManager.LogError($"Failed to load sound {fileName}: could not open {filePath}.");
                     yield break;
+                }
 
                 using (request)
                 {
@@ -105,12 +161,19 @@ namespace iiMenu.Utilities
 
                     try
                     {
-                        AudioClip clip = request.result == UnityWebRequest.Result.Success
-                            ? DownloadHandlerAudioClip.GetContent(request)
-                            : null;
+                        if (request.result != UnityWebRequest.Result.Success)
+                        {
+                            LogManager.LogError($"Failed to load sound {fileName}: {request.error} ({filePath})");
+                        }
+                        else
+                        {
+                            loaded = DownloadHandlerAudioClip.GetContent(request);
 
-                        if (clip != null)
-                            audioFilePool[fileName] = clip;
+                            if (loaded == null)
+                                LogManager.LogError($"Failed to decode sound {fileName}: {filePath} is not decodable audio.");
+                            else
+                                audioFilePool[fileName] = loaded;
+                        }
                     }
                     catch (System.Exception exception)
                     {
@@ -122,6 +185,8 @@ namespace iiMenu.Utilities
             {
                 lock (soundsLoading)
                     soundsLoading.Remove(fileName);
+
+                CompleteWaiters(fileName, loaded);
             }
         }
 
